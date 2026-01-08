@@ -193,7 +193,7 @@ export default function AddConditionDialog({
                   value={newNodeId}
                   onChange={e => setNewNodeId(e.target.value)}
                   placeholder="例: node1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                 />
               </div>
               <div>
@@ -205,7 +205,7 @@ export default function AddConditionDialog({
                   value={newNodeLabel}
                   onChange={e => setNewNodeLabel(e.target.value)}
                   placeholder="例: 新しい処理"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                 />
               </div>
             </div>
@@ -221,7 +221,7 @@ export default function AddConditionDialog({
               value={conditionLabel}
               onChange={e => setConditionLabel(e.target.value)}
               placeholder="例: Yes, No, 成功時, エラー時"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
             />
           </div>
 

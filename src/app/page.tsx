@@ -279,7 +279,7 @@ export default function Home() {
         <div className="w-1/3 p-4 overflow-y-auto border-r border-gray-200 bg-white">
           {/* デモ選択 */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">デモを選択</h2>
+            <h2 className="text-lg font-semibold mb-3 text-gray-900">デモを選択</h2>
             <div className="flex flex-wrap gap-2">
               {[
                 { key: 'simple', label: 'シンプル' },
@@ -315,7 +315,7 @@ export default function Home() {
               {/* ノードエディター */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold">ノード</h3>
+                  <h3 className="font-semibold text-gray-900">ノード</h3>
                   <button
                     onClick={addNode}
                     className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
@@ -341,7 +341,7 @@ export default function Home() {
                             to: edge.to === oldId ? e.target.value : edge.to,
                           })));
                         }}
-                        className="w-12 px-2 py-1 text-xs border rounded"
+                        className="w-12 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                         placeholder="ID"
                       />
                       <input
@@ -352,7 +352,7 @@ export default function Home() {
                           newNodes[index].label = e.target.value;
                           setCustomNodes(newNodes);
                         }}
-                        className="flex-1 px-2 py-1 text-xs border rounded"
+                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                         placeholder="ラベル"
                       />
                       <select
@@ -362,7 +362,7 @@ export default function Home() {
                           newNodes[index].shape = e.target.value as NodeShape;
                           setCustomNodes(newNodes);
                         }}
-                        className="px-2 py-1 text-xs border rounded"
+                        className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
                       >
                         {nodeShapes.map(shape => (
                           <option key={shape.value} value={shape.value}>
@@ -384,7 +384,7 @@ export default function Home() {
               {/* エッジエディター */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold">エッジ（接続）</h3>
+                  <h3 className="font-semibold text-gray-900">エッジ（接続）</h3>
                   <button
                     onClick={addEdge}
                     className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
@@ -403,7 +403,7 @@ export default function Home() {
                           newEdges[index].from = e.target.value;
                           setCustomEdges(newEdges);
                         }}
-                        className="w-16 px-2 py-1 text-xs border rounded"
+                        className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                       >
                         {customNodes.map(node => (
                           <option key={node.id} value={node.id}>
@@ -418,7 +418,7 @@ export default function Home() {
                           newEdges[index].style = e.target.value as EdgeStyle;
                           setCustomEdges(newEdges);
                         }}
-                        className="px-2 py-1 text-xs border rounded"
+                        className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
                       >
                         {edgeStyles.map(style => (
                           <option key={style.value} value={style.value}>
@@ -433,7 +433,7 @@ export default function Home() {
                           newEdges[index].to = e.target.value;
                           setCustomEdges(newEdges);
                         }}
-                        className="w-16 px-2 py-1 text-xs border rounded"
+                        className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                       >
                         {customNodes.map(node => (
                           <option key={node.id} value={node.id}>
@@ -449,7 +449,7 @@ export default function Home() {
                           newEdges[index].label = e.target.value;
                           setCustomEdges(newEdges);
                         }}
-                        className="flex-1 px-2 py-1 text-xs border rounded"
+                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                         placeholder="ラベル（任意）"
                       />
                       <button
@@ -467,7 +467,7 @@ export default function Home() {
 
           {/* Object定義表示 */}
           <div className="mt-6">
-            <h3 className="font-semibold mb-2">FlowchartDefinition オブジェクト</h3>
+            <h3 className="font-semibold mb-2 text-gray-900">FlowchartDefinition オブジェクト</h3>
             <pre className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs overflow-x-auto max-h-60 overflow-y-auto">
               {JSON.stringify(currentDefinition, null, 2)}
             </pre>
@@ -475,7 +475,7 @@ export default function Home() {
 
           {/* 生成されたMermaidコード */}
           <div className="mt-6">
-            <h3 className="font-semibold mb-2">生成された Mermaid コード</h3>
+            <h3 className="font-semibold mb-2 text-gray-900">生成された Mermaid コード</h3>
             <pre className="p-3 bg-gray-900 text-blue-300 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">
               {mermaidCode}
             </pre>
@@ -484,7 +484,7 @@ export default function Home() {
 
         {/* 右パネル: プレビュー */}
         <div className="flex-1 p-4 bg-gray-50">
-          <h2 className="text-lg font-semibold mb-3">プレビュー（ノードをクリックして条件追加）</h2>
+          <h2 className="text-lg font-semibold mb-3 text-gray-900">プレビュー（ノードをクリックして条件追加）</h2>
           <div className="bg-white rounded-lg shadow-sm h-[calc(100%-40px)]">
             <FlowchartRenderer
               mermaidCode={mermaidCode}
