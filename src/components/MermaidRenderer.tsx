@@ -18,10 +18,13 @@ export default function MermaidRenderer({ mermaidCode }: MermaidRendererProps) {
       theme: 'default',
       securityLevel: 'loose',
       fontFamily: 'Arial, sans-serif',
-      mindmap: {
-        padding: 20,
-        maxNodeSizeRatio: 0.5
+      flowchart: {
+        padding: 10,
       }
+      // mindmap: {
+      //   padding: 10,
+      //   maxNodeSizeRatio: 0.5
+      // }
     });
   }, []);
 
