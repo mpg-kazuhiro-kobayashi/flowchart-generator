@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import FlowchartRenderer from '@/components/FlowchartRenderer';
 import AddConditionDialog from '@/components/AddConditionDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
-import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle } from '@/types/flowchart';
+import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption } from '@/types/flowchart';
 
 // 利用可能なノード形状
 const nodeShapes: { value: NodeShape; label: string }[] = [
@@ -32,13 +32,34 @@ const edgeStyles: { value: EdgeStyle; label: string }[] = [
   { value: 'crossEnd', label: 'X終端 --x' },
 ];
 
+// 設問カテゴリ
+const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
+  { value: '', label: '設問なし', description: '通常のノード' },
+  { value: 'SA', label: 'SA（単一選択）', description: '選択肢から1つ選択' },
+  { value: 'MA', label: 'MA（複数選択）', description: '選択肢から複数選択' },
+  { value: 'FA', label: 'FA（自由入力）', description: 'テキスト入力（分岐不可）' },
+  { value: 'NA', label: 'NA（数値入力）', description: '数値入力（条件分岐可能）' },
+];
+
+// カスタムノードの型定義
+interface CustomNode {
+  id: string;
+  label: string;
+  shape: NodeShape;
+  questionCategory?: QuestionCategory;
+  choices?: ChoiceOption[];
+}
+
 export default function Home() {
   // カスタムエディター用の状態
-  const [customNodes, setCustomNodes] = useState<Array<{ id: string; label: string; shape: NodeShape }>>([
+  const [customNodes, setCustomNodes] = useState<CustomNode[]>([
     { id: 'A', label: 'Start', shape: 'stadium' },
     { id: 'B', label: 'Process', shape: 'rectangle' },
     { id: 'C', label: 'End', shape: 'stadium' },
   ]);
+
+  // 選択肢編集中のノードインデックス
+  const [editingChoicesIndex, setEditingChoicesIndex] = useState<number | null>(null);
   const [customEdges, setCustomEdges] = useState<Array<{ from: string; to: string; label: string; style: EdgeStyle }>>([
     { from: 'A', to: 'B', label: '', style: 'solid' },
     { from: 'B', to: 'C', label: '', style: 'solid' },
@@ -120,6 +141,32 @@ export default function Home() {
     setCustomNodes([...customNodes, { id: newId, label: `Node ${newId}`, shape: 'rectangle' }]);
   };
 
+  // 選択肢追加
+  const addChoice = (nodeIndex: number) => {
+    const newNodes = [...customNodes];
+    const node = newNodes[nodeIndex];
+    const choices = node.choices || [];
+    const newChoiceId = `${node.id}_opt${choices.length + 1}`;
+    newNodes[nodeIndex].choices = [...choices, { id: newChoiceId, label: `選択肢${choices.length + 1}` }];
+    setCustomNodes(newNodes);
+  };
+
+  // 選択肢削除
+  const removeChoice = (nodeIndex: number, choiceIndex: number) => {
+    const newNodes = [...customNodes];
+    newNodes[nodeIndex].choices = newNodes[nodeIndex].choices?.filter((_, i) => i !== choiceIndex);
+    setCustomNodes(newNodes);
+  };
+
+  // 選択肢更新
+  const updateChoice = (nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => {
+    const newNodes = [...customNodes];
+    if (newNodes[nodeIndex].choices) {
+      newNodes[nodeIndex].choices![choiceIndex][field] = value;
+      setCustomNodes(newNodes);
+    }
+  };
+
   // ノード削除
   const removeNode = (index: number) => {
     const nodeId = customNodes[index].id;
@@ -173,59 +220,164 @@ export default function Home() {
                   + 追加
                 </button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {customNodes.map((node, index) => (
-                  <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
-                    <input
-                      type="text"
-                      value={node.id}
-                      onChange={e => {
-                        const newNodes = [...customNodes];
-                        const oldId = newNodes[index].id;
-                        newNodes[index].id = e.target.value;
-                        setCustomNodes(newNodes);
-                        // エッジのIDも更新
-                        setCustomEdges(customEdges.map(edge => ({
-                          ...edge,
-                          from: edge.from === oldId ? e.target.value : edge.from,
-                          to: edge.to === oldId ? e.target.value : edge.to,
-                        })));
-                      }}
-                      className="w-12 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                      placeholder="ID"
-                    />
-                    <input
-                      type="text"
-                      value={node.label}
-                      onChange={e => {
-                        const newNodes = [...customNodes];
-                        newNodes[index].label = e.target.value;
-                        setCustomNodes(newNodes);
-                      }}
-                      className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                      placeholder="ラベル"
-                    />
-                    <select
-                      value={node.shape}
-                      onChange={e => {
-                        const newNodes = [...customNodes];
-                        newNodes[index].shape = e.target.value as NodeShape;
-                        setCustomNodes(newNodes);
-                      }}
-                      className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                    >
-                      {nodeShapes.map(shape => (
-                        <option key={shape.value} value={shape.value}>
-                          {shape.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => removeNode(index)}
-                      className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                      削除
-                    </button>
+                  <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    {/* 基本情報行 */}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={node.id}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          const oldId = newNodes[index].id;
+                          newNodes[index].id = e.target.value;
+                          setCustomNodes(newNodes);
+                          // エッジのIDも更新
+                          setCustomEdges(customEdges.map(edge => ({
+                            ...edge,
+                            from: edge.from === oldId ? e.target.value : edge.from,
+                            to: edge.to === oldId ? e.target.value : edge.to,
+                          })));
+                        }}
+                        className="w-12 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                        placeholder="ID"
+                      />
+                      <input
+                        type="text"
+                        value={node.label}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          newNodes[index].label = e.target.value;
+                          setCustomNodes(newNodes);
+                        }}
+                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                        placeholder="ラベル"
+                      />
+                      <select
+                        value={node.shape}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          newNodes[index].shape = e.target.value as NodeShape;
+                          setCustomNodes(newNodes);
+                        }}
+                        className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                      >
+                        {nodeShapes.map(shape => (
+                          <option key={shape.value} value={shape.value}>
+                            {shape.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => removeNode(index)}
+                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        削除
+                      </button>
+                    </div>
+
+                    {/* 設問カテゴリ選択 */}
+                    <div className="mt-2 flex gap-2 items-center">
+                      <span className="text-xs text-gray-600 min-w-16">設問タイプ:</span>
+                      <select
+                        value={node.questionCategory || ''}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          const category = e.target.value as QuestionCategory | '';
+                          if (category) {
+                            newNodes[index].questionCategory = category;
+                            // SA/MAの場合、選択肢がなければ初期化
+                            if ((category === 'SA' || category === 'MA') && !newNodes[index].choices) {
+                              newNodes[index].choices = [];
+                            }
+                          } else {
+                            delete newNodes[index].questionCategory;
+                            delete newNodes[index].choices;
+                          }
+                          setCustomNodes(newNodes);
+                        }}
+                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                      >
+                        {questionCategories.map(cat => (
+                          <option key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </option>
+                        ))}
+                      </select>
+                      {/* SA/MAの場合、選択肢編集ボタン */}
+                      {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                        <button
+                          onClick={() => setEditingChoicesIndex(editingChoicesIndex === index ? null : index)}
+                          className={`px-2 py-1 text-xs rounded ${
+                            editingChoicesIndex === index
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          選択肢 ({node.choices?.length || 0})
+                        </button>
+                      )}
+                    </div>
+
+                    {/* カテゴリの説明 */}
+                    {node.questionCategory && (
+                      <div className="mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          node.questionCategory === 'FA' ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {questionCategories.find(c => c.value === node.questionCategory)?.description}
+                          {node.questionCategory === 'FA' && ' - 分岐設定不可'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 選択肢編集エリア（SA/MA） */}
+                    {editingChoicesIndex === index && (node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                      <div className="mt-3 p-2 bg-white rounded border border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-700">選択肢一覧</span>
+                          <button
+                            onClick={() => addChoice(index)}
+                            className="px-2 py-0.5 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                          >
+                            + 追加
+                          </button>
+                        </div>
+                        {node.choices && node.choices.length > 0 ? (
+                          <div className="space-y-1">
+                            {node.choices.map((choice, choiceIndex) => (
+                              <div key={choiceIndex} className="flex gap-1 items-center">
+                                <input
+                                  type="text"
+                                  value={choice.id}
+                                  onChange={e => updateChoice(index, choiceIndex, 'id', e.target.value)}
+                                  className="w-20 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
+                                  placeholder="ID"
+                                />
+                                <input
+                                  type="text"
+                                  value={choice.label}
+                                  onChange={e => updateChoice(index, choiceIndex, 'label', e.target.value)}
+                                  className="flex-1 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
+                                  placeholder="ラベル"
+                                />
+                                <button
+                                  onClick={() => removeChoice(index, choiceIndex)}
+                                  className="px-1 py-0.5 text-xs bg-red-400 text-white rounded hover:bg-red-500"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 text-center py-2">
+                            選択肢がありません。「+ 追加」で選択肢を追加してください。
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

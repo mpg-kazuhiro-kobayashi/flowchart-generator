@@ -1,22 +1,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, EdgeStyle } from '@/types/flowchart';
+import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition } from '@/types/flowchart';
+
+// 数値演算子のオプション
+const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
+  { value: 'eq', label: '等しい', symbol: '=' },
+  { value: 'gt', label: 'より大きい', symbol: '>' },
+  { value: 'lt', label: 'より小さい', symbol: '<' },
+  { value: 'gte', label: '以上', symbol: '>=' },
+  { value: 'lte', label: '以下', symbol: '<=' },
+];
+
+export interface AddConditionResult {
+  targetNodeId: string;
+  label: string;
+  style: EdgeStyle;
+  createNewNode?: {
+    id: string;
+    label: string;
+  };
+  condition?: EdgeCondition;
+}
 
 interface AddConditionDialogProps {
   isOpen: boolean;
   onClose: () => void;
   sourceNode: FlowchartNode | null;
   availableNodes: FlowchartNode[];
-  onAddCondition: (condition: {
-    targetNodeId: string;
-    label: string;
-    style: EdgeStyle;
-    createNewNode?: {
-      id: string;
-      label: string;
-    };
-  }) => void;
+  onAddCondition: (condition: AddConditionResult) => void;
 }
 
 const edgeStyleOptions: { value: EdgeStyle; label: string; description: string }[] = [
@@ -40,6 +52,11 @@ export default function AddConditionDialog({
   const [conditionLabel, setConditionLabel] = useState('');
   const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>('solid');
 
+  // 分岐条件用の状態
+  const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
+  const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
+  const [numericValue, setNumericValue] = useState<string>('');
+
   // ダイアログが開いたときに状態をリセット
   useEffect(() => {
     if (isOpen) {
@@ -49,39 +66,93 @@ export default function AddConditionDialog({
       setNewNodeLabel('');
       setConditionLabel('');
       setEdgeStyle('solid');
+      setSelectedChoiceIds([]);
+      setNumericOperator('eq');
+      setNumericValue('');
     }
   }, [isOpen, availableNodes]);
 
   // 利用可能なノード（ソースノード自身を除く）
   const selectableNodes = availableNodes.filter(n => n.id !== sourceNode?.id);
 
+  // ソースノードの設問カテゴリ
+  const questionCategory = sourceNode?.questionCategory;
+  const hasChoices = (questionCategory === 'SA' || questionCategory === 'MA') && sourceNode?.choices && sourceNode.choices.length > 0;
+  const isNumeric = questionCategory === 'NA';
+  const isFreeAnswer = questionCategory === 'FA';
+
+  // 条件ラベルを自動生成
+  const generateConditionLabel = (): string => {
+    if (hasChoices && selectedChoiceIds.length > 0) {
+      const selectedLabels = sourceNode!.choices!
+        .filter(c => selectedChoiceIds.includes(c.id))
+        .map(c => c.label);
+      return selectedLabels.join(', ');
+    }
+    if (isNumeric && numericValue) {
+      const op = numericOperators.find(o => o.value === numericOperator);
+      return `${op?.symbol || ''} ${numericValue}`;
+    }
+    return conditionLabel;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 分岐条件を構築
+    let condition: EdgeCondition | undefined;
+    if (hasChoices && selectedChoiceIds.length > 0) {
+      condition = { choiceIds: selectedChoiceIds };
+    } else if (isNumeric && numericValue) {
+      condition = {
+        numericCondition: {
+          operator: numericOperator,
+          value: parseFloat(numericValue),
+        },
+      };
+    }
+
+    // 表示用ラベルを決定
+    const finalLabel = generateConditionLabel();
 
     if (targetType === 'existing' && selectedTargetId) {
       onAddCondition({
         targetNodeId: selectedTargetId,
-        label: conditionLabel,
+        label: finalLabel,
         style: edgeStyle,
+        condition,
       });
     } else if (targetType === 'new' && newNodeId && newNodeLabel) {
       onAddCondition({
         targetNodeId: newNodeId,
-        label: conditionLabel,
+        label: finalLabel,
         style: edgeStyle,
         createNewNode: {
           id: newNodeId,
           label: newNodeLabel,
         },
+        condition,
       });
     }
 
     onClose();
   };
 
-  const isValid = targetType === 'existing'
+  // バリデーション
+  const isTargetValid = targetType === 'existing'
     ? !!selectedTargetId
     : !!(newNodeId && newNodeLabel);
+
+  // 分岐条件のバリデーション（設問カテゴリがある場合のみ必須）
+  const isConditionValid = (() => {
+    if (!questionCategory) return true; // 設問なしの場合は条件不要
+    if (isFreeAnswer) return false; // FAは分岐不可
+    if (hasChoices) return selectedChoiceIds.length > 0;
+    if (isNumeric) return numericValue !== '';
+    return true;
+  })();
+
+  const isValid = isTargetValid && isConditionValid;
 
   if (!isOpen || !sourceNode) return null;
 
@@ -211,19 +282,105 @@ export default function AddConditionDialog({
             </div>
           )}
 
-          {/* 条件ラベル */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              条件ラベル（任意）
-            </label>
-            <input
-              type="text"
-              value={conditionLabel}
-              onChange={e => setConditionLabel(e.target.value)}
-              placeholder="例: Yes, No, 成功時, エラー時"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-            />
-          </div>
+          {/* 自由入力の警告（FAの場合） */}
+          {isFreeAnswer && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>注意:</strong> 自由入力（FA）の設問は分岐条件を設定できません。
+              </p>
+            </div>
+          )}
+
+          {/* 選択肢による分岐条件（SA/MAの場合） */}
+          {hasChoices && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                分岐条件: 選択肢を選択
+                {questionCategory === 'SA' && <span className="text-gray-500 text-xs ml-2">（1つ選択）</span>}
+                {questionCategory === 'MA' && <span className="text-gray-500 text-xs ml-2">（複数選択可）</span>}
+              </label>
+              <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                {sourceNode!.choices!.map(choice => (
+                  <label
+                    key={choice.id}
+                    className={`flex items-center p-2 rounded cursor-pointer transition-colors ${
+                      selectedChoiceIds.includes(choice.id)
+                        ? 'bg-green-100 border border-green-400'
+                        : 'bg-white border border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <input
+                      type={questionCategory === 'SA' ? 'radio' : 'checkbox'}
+                      name="choiceCondition"
+                      value={choice.id}
+                      checked={selectedChoiceIds.includes(choice.id)}
+                      onChange={e => {
+                        if (questionCategory === 'SA') {
+                          // 単一選択の場合
+                          setSelectedChoiceIds([e.target.value]);
+                        } else {
+                          // 複数選択の場合
+                          if (e.target.checked) {
+                            setSelectedChoiceIds([...selectedChoiceIds, e.target.value]);
+                          } else {
+                            setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== e.target.value));
+                          }
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-900">{choice.label}</span>
+                    <span className="text-xs text-gray-500 ml-2">({choice.id})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 数値条件（NAの場合） */}
+          {isNumeric && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                分岐条件: 数値条件を設定
+              </label>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={numericOperator}
+                  onChange={e => setNumericOperator(e.target.value as NumericOperator)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                >
+                  {numericOperators.map(op => (
+                    <option key={op.value} value={op.value}>
+                      {op.label} ({op.symbol})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={numericValue}
+                  onChange={e => setNumericValue(e.target.value)}
+                  placeholder="値を入力"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 条件ラベル（設問カテゴリがない場合のみ表示） */}
+          {!questionCategory && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                条件ラベル（任意）
+              </label>
+              <input
+                type="text"
+                value={conditionLabel}
+                onChange={e => setConditionLabel(e.target.value)}
+                placeholder="例: Yes, No, 成功時, エラー時"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              />
+            </div>
+          )}
 
           {/* エッジスタイル */}
           <div>
@@ -262,7 +419,7 @@ export default function AddConditionDialog({
             <p className="text-xs text-gray-500 mb-1">プレビュー</p>
             <p className="font-mono text-sm text-gray-700">
               {sourceNode.id} {edgeStyleOptions.find(o => o.value === edgeStyle)?.description}
-              {conditionLabel && `|${conditionLabel}|`}{' '}
+              {generateConditionLabel() && `|${generateConditionLabel()}|`}{' '}
               {targetType === 'existing' ? selectedTargetId : newNodeId || '???'}
             </p>
           </div>

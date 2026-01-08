@@ -22,6 +22,35 @@ export type NodeShape =
   | 'trapezoid'      // [/text\] - 台形
   | 'trapezoidAlt';  // [\text/] - 逆台形
 
+/** 設問カテゴリ */
+export type QuestionCategory =
+  | 'SA'  // Single Answer - 単一選択
+  | 'MA'  // Multiple Answer - 複数選択
+  | 'FA'  // Free Answer - 自由入力（分岐不可）
+  | 'NA'; // Numeric Answer - 数値入力
+
+/** 選択肢（SA/MA用） */
+export interface ChoiceOption {
+  /** 選択肢ID */
+  id: string;
+  /** 選択肢のラベル */
+  label: string;
+}
+
+/** 数値条件の比較演算子（NA用） */
+export type NumericOperator =
+  | 'eq'  // 等しい (==)
+  | 'gt'  // より大きい (>)
+  | 'lt'  // より小さい (<)
+  | 'gte' // 以上 (>=)
+  | 'lte'; // 以下 (<=)
+
+/** 数値条件（NA用） */
+export interface NumericCondition {
+  operator: NumericOperator;
+  value: number;
+}
+
 /** エッジ（矢印）のスタイル */
 export type EdgeStyle =
   | 'solid'          // --> 実線矢印
@@ -50,6 +79,18 @@ export interface FlowchartNode {
     target: string;
     tooltip?: string;
   };
+  /** 設問カテゴリ（設問ノードの場合） */
+  questionCategory?: QuestionCategory;
+  /** 選択肢（SA/MAの場合） */
+  choices?: ChoiceOption[];
+}
+
+/** エッジの分岐条件 */
+export interface EdgeCondition {
+  /** 選択肢IDによる条件（SA/MA用） - 指定した選択肢が選ばれた場合に遷移 */
+  choiceIds?: string[];
+  /** 数値条件（NA用） */
+  numericCondition?: NumericCondition;
 }
 
 /** フローチャートのエッジ（接続線） */
@@ -62,6 +103,8 @@ export interface FlowchartEdge {
   style?: EdgeStyle;
   /** エッジに表示するラベル */
   label?: string;
+  /** 分岐条件（設問ノードからの遷移の場合） */
+  condition?: EdgeCondition;
 }
 
 /** サブグラフ */

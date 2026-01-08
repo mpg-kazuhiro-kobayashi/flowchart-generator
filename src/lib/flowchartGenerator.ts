@@ -150,6 +150,18 @@ export class FlowchartGenerator {
   }
 
   /**
+   * エッジラベル用のエスケープ処理
+   * Mermaid.js では > や < がマークダウンとして解釈されるため、
+   * HTMLエンティティに変換する
+   */
+  private static escapeEdgeLabel(text: string): string {
+    return text
+      .replace(/>/g, '&gt;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
    * エッジ定義を生成
    */
   private static generateEdge(edge: FlowchartEdge): string {
@@ -157,8 +169,10 @@ export class FlowchartGenerator {
     const arrow = this.getArrowSyntax(style);
 
     if (edge.label) {
+      // ラベルをエスケープしてから使用
+      const escapedLabel = this.escapeEdgeLabel(edge.label);
       // ラベル付きエッジ
-      return `${edge.from} ${arrow}|${edge.label}| ${edge.to}`;
+      return `${edge.from} ${arrow}|${escapedLabel}| ${edge.to}`;
     }
 
     return `${edge.from} ${arrow} ${edge.to}`;
