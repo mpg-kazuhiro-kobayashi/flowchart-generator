@@ -1,53 +1,510 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import MermaidRenderer from '@/components/MermaidRenderer';
-import MermaidEditor from '@/components/MermaidEditor';
-import DetailsSidebar from '@/components/DetailsSidebar';
-import TestButton from '@/components/TestButton';
-import { useMindmapStore } from '@/store/mindmapStore';
+import { useState, useMemo, useCallback } from 'react';
+import FlowchartRenderer from '@/components/FlowchartRenderer';
+import AddConditionDialog from '@/components/AddConditionDialog';
+import { FlowchartGenerator } from '@/lib/flowchartGenerator';
+import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle } from '@/types/flowchart';
+
+// サンプルデータ: シンプルなフローチャート
+const simpleFlowchartDef: FlowchartDefinition = {
+  direction: 'TD',
+  nodes: [
+    { id: 'A', label: 'Start', shape: 'stadium' },
+    { id: 'B', label: 'Process 1', shape: 'rectangle' },
+    { id: 'C', label: 'Decision?', shape: 'rhombus' },
+    { id: 'D', label: 'Process 2', shape: 'rectangle' },
+    { id: 'E', label: 'End', shape: 'stadium' },
+  ],
+  edges: [
+    { from: 'A', to: 'B' },
+    { from: 'B', to: 'C' },
+    { from: 'C', to: 'D', label: 'Yes' },
+    { from: 'C', to: 'E', label: 'No' },
+    { from: 'D', to: 'E' },
+  ],
+};
+
+// サンプルデータ: 複雑なフローチャート（スタイル付き）
+const complexFlowchartDef: FlowchartDefinition = {
+  direction: 'LR',
+  nodes: [
+    { id: 'user', label: 'User', shape: 'circle', className: 'user' },
+    { id: 'frontend', label: 'Frontend\n(React)', shape: 'rectangle', className: 'frontend' },
+    { id: 'api', label: 'API Gateway', shape: 'hexagon', className: 'api' },
+    { id: 'auth', label: 'Auth?', shape: 'rhombus' },
+    { id: 'backend', label: 'Backend\n(Node.js)', shape: 'rectangle', className: 'backend' },
+    { id: 'db', label: 'Database', shape: 'database', className: 'db' },
+    { id: 'cache', label: 'Cache', shape: 'parallelogram', className: 'cache' },
+    { id: 'error', label: 'Error', shape: 'doubleCircle', className: 'error' },
+  ],
+  edges: [
+    { from: 'user', to: 'frontend', style: 'solid' },
+    { from: 'frontend', to: 'api', style: 'solid' },
+    { from: 'api', to: 'auth', style: 'dotted' },
+    { from: 'auth', to: 'backend', label: 'Valid', style: 'solid' },
+    { from: 'auth', to: 'error', label: 'Invalid', style: 'dotted' },
+    { from: 'backend', to: 'cache', style: 'thick' },
+    { from: 'backend', to: 'db', style: 'thick' },
+    { from: 'cache', to: 'frontend', style: 'dotted', label: 'Response' },
+  ],
+  styles: [
+    { className: 'user', styles: { fill: '#e1f5fe', stroke: '#01579b', 'stroke-width': '2px' } },
+    { className: 'frontend', styles: { fill: '#e8f5e9', stroke: '#2e7d32', 'stroke-width': '2px' } },
+    { className: 'api', styles: { fill: '#fff3e0', stroke: '#ef6c00', 'stroke-width': '2px' } },
+    { className: 'backend', styles: { fill: '#f3e5f5', stroke: '#7b1fa2', 'stroke-width': '2px' } },
+    { className: 'db', styles: { fill: '#e3f2fd', stroke: '#1565c0', 'stroke-width': '2px' } },
+    { className: 'cache', styles: { fill: '#fce4ec', stroke: '#c2185b', 'stroke-width': '2px' } },
+    { className: 'error', styles: { fill: '#ffebee', stroke: '#c62828', 'stroke-width': '3px' } },
+  ],
+};
+
+// サンプルデータ: サブグラフ付き
+const subgraphFlowchartDef: FlowchartDefinition = {
+  direction: 'TB',
+  nodes: [
+    { id: 'start', label: 'Start', shape: 'stadium' },
+    { id: 'input', label: 'Input Data', shape: 'parallelogram' },
+    { id: 'validate', label: 'Validate', shape: 'rectangle' },
+    { id: 'process', label: 'Process', shape: 'rectangle' },
+    { id: 'transform', label: 'Transform', shape: 'rectangle' },
+    { id: 'output', label: 'Output', shape: 'parallelogram' },
+    { id: 'log', label: 'Log', shape: 'database' },
+    { id: 'end', label: 'End', shape: 'stadium' },
+  ],
+  edges: [
+    { from: 'start', to: 'input' },
+    { from: 'input', to: 'validate' },
+    { from: 'validate', to: 'process' },
+    { from: 'process', to: 'transform' },
+    { from: 'transform', to: 'output' },
+    { from: 'output', to: 'end' },
+    { from: 'process', to: 'log', style: 'dotted' },
+  ],
+  subgraphs: [
+    {
+      id: 'inputPhase',
+      title: 'Input Phase',
+      nodeIds: ['input', 'validate'],
+    },
+    {
+      id: 'processingPhase',
+      title: 'Processing Phase',
+      nodeIds: ['process', 'transform'],
+      direction: 'LR',
+    },
+    {
+      id: 'outputPhase',
+      title: 'Output Phase',
+      nodeIds: ['output', 'log'],
+    },
+  ],
+};
+
+// 利用可能なノード形状
+const nodeShapes: { value: NodeShape; label: string }[] = [
+  { value: 'rectangle', label: '四角形 [text]' },
+  { value: 'round', label: '角丸 (text)' },
+  { value: 'stadium', label: 'スタジアム ([text])' },
+  { value: 'subroutine', label: 'サブルーチン [[text]]' },
+  { value: 'database', label: 'データベース [(text)]' },
+  { value: 'circle', label: '円 ((text))' },
+  { value: 'doubleCircle', label: '二重円 (((text)))' },
+  { value: 'rhombus', label: 'ひし形 {text}' },
+  { value: 'hexagon', label: '六角形 {{text}}' },
+  { value: 'parallelogram', label: '平行四辺形 [/text/]' },
+  { value: 'trapezoid', label: '台形 [/text\\]' },
+];
+
+// 利用可能なエッジスタイル
+const edgeStyles: { value: EdgeStyle; label: string }[] = [
+  { value: 'solid', label: '実線矢印 -->' },
+  { value: 'dotted', label: '点線矢印 -.->' },
+  { value: 'thick', label: '太線矢印 ==>' },
+  { value: 'solidNoArrow', label: '実線 ---' },
+  { value: 'biDirectional', label: '双方向 <-->' },
+  { value: 'circleEnd', label: '丸終端 --o' },
+  { value: 'crossEnd', label: 'X終端 --x' },
+];
 
 export default function Home() {
-  const { mermaidInput, parseMermaidToMindmap } = useMindmapStore();
-  const [showEditor, setShowEditor] = useState(false);
+  const [selectedDemo, setSelectedDemo] = useState<'simple' | 'complex' | 'subgraph' | 'custom'>('custom');
 
-  useEffect(() => {
-    parseMermaidToMindmap(mermaidInput);
-  }, [mermaidInput, parseMermaidToMindmap]);
+  // カスタムエディター用の状態
+  const [customNodes, setCustomNodes] = useState<Array<{ id: string; label: string; shape: NodeShape }>>([
+    { id: 'A', label: 'Start', shape: 'stadium' },
+    { id: 'B', label: 'Process', shape: 'rectangle' },
+    { id: 'C', label: 'End', shape: 'stadium' },
+  ]);
+  const [customEdges, setCustomEdges] = useState<Array<{ from: string; to: string; label: string; style: EdgeStyle }>>([
+    { from: 'A', to: 'B', label: '', style: 'solid' },
+    { from: 'B', to: 'C', label: '', style: 'solid' },
+  ]);
+
+  // ダイアログ用の状態
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedSourceNode, setSelectedSourceNode] = useState<FlowchartNode | null>(null);
+
+  // 現在選択されているフローチャート定義
+  const currentDefinition = useMemo((): FlowchartDefinition => {
+    switch (selectedDemo) {
+      case 'simple':
+        return simpleFlowchartDef;
+      case 'complex':
+        return complexFlowchartDef;
+      case 'subgraph':
+        return subgraphFlowchartDef;
+      case 'custom':
+        return {
+          direction: 'TD' as const,
+          nodes: customNodes,
+          edges: customEdges.map(e => ({
+            from: e.from,
+            to: e.to,
+            label: e.label || undefined,
+            style: e.style,
+          })),
+        };
+    }
+  }, [selectedDemo, customNodes, customEdges]);
+
+  // Mermaid文字列を生成
+  const mermaidCode = useMemo(() => {
+    return FlowchartGenerator.generate(currentDefinition);
+  }, [currentDefinition]);
+
+  // ノードクリック時のハンドラ
+  const handleNodeClick = useCallback((nodeId: string) => {
+    // クリックされたノードを探す
+    const node = currentDefinition.nodes.find(n => n.id === nodeId);
+    if (node) {
+      setSelectedSourceNode(node);
+      setIsDialogOpen(true);
+    } else {
+      // ラベルで検索（フォールバック）
+      const nodeByLabel = currentDefinition.nodes.find(n => n.label === nodeId);
+      if (nodeByLabel) {
+        setSelectedSourceNode(nodeByLabel);
+        setIsDialogOpen(true);
+      }
+    }
+  }, [currentDefinition.nodes]);
+
+  // 条件追加のハンドラ
+  const handleAddCondition = useCallback((condition: {
+    targetNodeId: string;
+    label: string;
+    style: EdgeStyle;
+    createNewNode?: { id: string; label: string };
+  }) => {
+    if (!selectedSourceNode) return;
+
+    // カスタムモードの場合のみ編集可能
+    if (selectedDemo !== 'custom') {
+      // プリセットをカスタムにコピー
+      setCustomNodes([...currentDefinition.nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        shape: n.shape || 'rectangle' as NodeShape,
+      }))]);
+      setCustomEdges([...currentDefinition.edges.map(e => ({
+        from: e.from,
+        to: e.to,
+        label: e.label || '',
+        style: e.style || 'solid' as EdgeStyle,
+      }))]);
+      setSelectedDemo('custom');
+    }
+
+    // 新規ノードの作成
+    if (condition.createNewNode) {
+      setCustomNodes(prev => [...prev, {
+        id: condition.createNewNode!.id,
+        label: condition.createNewNode!.label,
+        shape: 'rectangle',
+      }]);
+    }
+
+    // エッジの追加
+    setCustomEdges(prev => [...prev, {
+      from: selectedSourceNode.id,
+      to: condition.targetNodeId,
+      label: condition.label,
+      style: condition.style,
+    }]);
+
+    setIsDialogOpen(false);
+    setSelectedSourceNode(null);
+  }, [selectedSourceNode, selectedDemo, currentDefinition]);
+
+  // ノード追加
+  const addNode = () => {
+    const newId = String.fromCharCode(65 + customNodes.length); // A, B, C...
+    setCustomNodes([...customNodes, { id: newId, label: `Node ${newId}`, shape: 'rectangle' }]);
+  };
+
+  // ノード削除
+  const removeNode = (index: number) => {
+    const nodeId = customNodes[index].id;
+    setCustomNodes(customNodes.filter((_, i) => i !== index));
+    setCustomEdges(customEdges.filter(e => e.from !== nodeId && e.to !== nodeId));
+  };
+
+  // エッジ追加
+  const addEdge = () => {
+    if (customNodes.length >= 2) {
+      setCustomEdges([...customEdges, { from: customNodes[0].id, to: customNodes[1].id, label: '', style: 'solid' }]);
+    }
+  };
+
+  // エッジ削除
+  const removeEdge = (index: number) => {
+    setCustomEdges(customEdges.filter((_, i) => i !== index));
+  };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <div className="min-h-screen bg-gray-100">
+      {/* ヘッダー */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">🧠 Interactive Mindmap</h1>
-          <div className="flex gap-2">
-            <TestButton />
-            <button
-              onClick={() => setShowEditor(!showEditor)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              {showEditor ? 'マインドマップを表示' : 'エディタを表示'}
-            </button>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Flowchart Generator</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            JavaScript Object から Mermaid フローチャートを生成 ・ ノードをクリックして条件を追加
+          </p>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {showEditor ? (
-          <div className="flex-1 p-6">
-            <MermaidEditor />
+      <div className="flex h-[calc(100vh-80px)]">
+        {/* 左パネル: コントロール */}
+        <div className="w-1/3 p-4 overflow-y-auto border-r border-gray-200 bg-white">
+          {/* デモ選択 */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">デモを選択</h2>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'simple', label: 'シンプル' },
+                { key: 'complex', label: '複雑（スタイル付き）' },
+                { key: 'subgraph', label: 'サブグラフ' },
+                { key: 'custom', label: 'カスタム' },
+              ].map(demo => (
+                <button
+                  key={demo.key}
+                  onClick={() => setSelectedDemo(demo.key as typeof selectedDemo)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    selectedDemo === demo.key
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {demo.label}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="flex-1">
-              <MermaidRenderer mermaidCode={mermaidInput} />
+
+          {/* 操作説明 */}
+          <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-800">
+              <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードから新しい接続を追加できます。
+            </p>
+          </div>
+
+          {/* カスタムエディター */}
+          {selectedDemo === 'custom' && (
+            <div className="space-y-6">
+              {/* ノードエディター */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">ノード</h3>
+                  <button
+                    onClick={addNode}
+                    className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                  >
+                    + 追加
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {customNodes.map((node, index) => (
+                    <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
+                      <input
+                        type="text"
+                        value={node.id}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          const oldId = newNodes[index].id;
+                          newNodes[index].id = e.target.value;
+                          setCustomNodes(newNodes);
+                          // エッジのIDも更新
+                          setCustomEdges(customEdges.map(edge => ({
+                            ...edge,
+                            from: edge.from === oldId ? e.target.value : edge.from,
+                            to: edge.to === oldId ? e.target.value : edge.to,
+                          })));
+                        }}
+                        className="w-12 px-2 py-1 text-xs border rounded"
+                        placeholder="ID"
+                      />
+                      <input
+                        type="text"
+                        value={node.label}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          newNodes[index].label = e.target.value;
+                          setCustomNodes(newNodes);
+                        }}
+                        className="flex-1 px-2 py-1 text-xs border rounded"
+                        placeholder="ラベル"
+                      />
+                      <select
+                        value={node.shape}
+                        onChange={e => {
+                          const newNodes = [...customNodes];
+                          newNodes[index].shape = e.target.value as NodeShape;
+                          setCustomNodes(newNodes);
+                        }}
+                        className="px-2 py-1 text-xs border rounded"
+                      >
+                        {nodeShapes.map(shape => (
+                          <option key={shape.value} value={shape.value}>
+                            {shape.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => removeNode(index)}
+                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* エッジエディター */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">エッジ（接続）</h3>
+                  <button
+                    onClick={addEdge}
+                    className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                    disabled={customNodes.length < 2}
+                  >
+                    + 追加
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {customEdges.map((edge, index) => (
+                    <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
+                      <select
+                        value={edge.from}
+                        onChange={e => {
+                          const newEdges = [...customEdges];
+                          newEdges[index].from = e.target.value;
+                          setCustomEdges(newEdges);
+                        }}
+                        className="w-16 px-2 py-1 text-xs border rounded"
+                      >
+                        {customNodes.map(node => (
+                          <option key={node.id} value={node.id}>
+                            {node.id}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={edge.style}
+                        onChange={e => {
+                          const newEdges = [...customEdges];
+                          newEdges[index].style = e.target.value as EdgeStyle;
+                          setCustomEdges(newEdges);
+                        }}
+                        className="px-2 py-1 text-xs border rounded"
+                      >
+                        {edgeStyles.map(style => (
+                          <option key={style.value} value={style.value}>
+                            {style.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={edge.to}
+                        onChange={e => {
+                          const newEdges = [...customEdges];
+                          newEdges[index].to = e.target.value;
+                          setCustomEdges(newEdges);
+                        }}
+                        className="w-16 px-2 py-1 text-xs border rounded"
+                      >
+                        {customNodes.map(node => (
+                          <option key={node.id} value={node.id}>
+                            {node.id}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={edge.label}
+                        onChange={e => {
+                          const newEdges = [...customEdges];
+                          newEdges[index].label = e.target.value;
+                          setCustomEdges(newEdges);
+                        }}
+                        className="flex-1 px-2 py-1 text-xs border rounded"
+                        placeholder="ラベル（任意）"
+                      />
+                      <button
+                        onClick={() => removeEdge(index)}
+                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="w-96">
-              <DetailsSidebar />
-            </div>
-          </>
-        )}
+          )}
+
+          {/* Object定義表示 */}
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">FlowchartDefinition オブジェクト</h3>
+            <pre className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs overflow-x-auto max-h-60 overflow-y-auto">
+              {JSON.stringify(currentDefinition, null, 2)}
+            </pre>
+          </div>
+
+          {/* 生成されたMermaidコード */}
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">生成された Mermaid コード</h3>
+            <pre className="p-3 bg-gray-900 text-blue-300 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">
+              {mermaidCode}
+            </pre>
+          </div>
+        </div>
+
+        {/* 右パネル: プレビュー */}
+        <div className="flex-1 p-4 bg-gray-50">
+          <h2 className="text-lg font-semibold mb-3">プレビュー（ノードをクリックして条件追加）</h2>
+          <div className="bg-white rounded-lg shadow-sm h-[calc(100%-40px)]">
+            <FlowchartRenderer
+              mermaidCode={mermaidCode}
+              onNodeClick={handleNodeClick}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* 条件追加ダイアログ */}
+      <AddConditionDialog
+        isOpen={isDialogOpen}
+        onClose={() => {
+          setIsDialogOpen(false);
+          setSelectedSourceNode(null);
+        }}
+        sourceNode={selectedSourceNode}
+        availableNodes={currentDefinition.nodes}
+        onAddCondition={handleAddCondition}
+      />
     </div>
   );
 }
