@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import MermaidRenderer from '@/components/MermaidRenderer';
-import { FlowchartGenerator, createSimpleFlowchart } from '@/lib/flowchartGenerator';
-import { FlowchartDefinition, NodeShape, EdgeStyle } from '@/types/flowchart';
+import { useState, useMemo, useCallback } from 'react';
+import FlowchartRenderer from '@/components/FlowchartRenderer';
+import AddConditionDialog from '@/components/AddConditionDialog';
+import { FlowchartGenerator } from '@/lib/flowchartGenerator';
+import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle } from '@/types/flowchart';
 
 // サンプルデータ: シンプルなフローチャート
 const simpleFlowchartDef: FlowchartDefinition = {
@@ -127,19 +128,25 @@ const edgeStyles: { value: EdgeStyle; label: string }[] = [
 ];
 
 export default function FlowchartDemoPage() {
-  const [selectedDemo, setSelectedDemo] = useState<'simple' | 'complex' | 'subgraph' | 'custom'>('simple');
+  const [selectedDemo, setSelectedDemo] = useState<'simple' | 'complex' | 'subgraph' | 'custom'>('custom');
 
   // カスタムエディター用の状態
   const [customNodes, setCustomNodes] = useState<Array<{ id: string; label: string; shape: NodeShape }>>([
-    { id: 'A', label: 'Node A', shape: 'rectangle' },
-    { id: 'B', label: 'Node B', shape: 'rectangle' },
+    { id: 'A', label: 'Start', shape: 'stadium' },
+    { id: 'B', label: 'Process', shape: 'rectangle' },
+    { id: 'C', label: 'End', shape: 'stadium' },
   ]);
   const [customEdges, setCustomEdges] = useState<Array<{ from: string; to: string; label: string; style: EdgeStyle }>>([
     { from: 'A', to: 'B', label: '', style: 'solid' },
+    { from: 'B', to: 'C', label: '', style: 'solid' },
   ]);
 
+  // ダイアログ用の状態
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedSourceNode, setSelectedSourceNode] = useState<FlowchartNode | null>(null);
+
   // 現在選択されているフローチャート定義
-  const currentDefinition = useMemo(() => {
+  const currentDefinition = useMemo((): FlowchartDefinition => {
     switch (selectedDemo) {
       case 'simple':
         return simpleFlowchartDef;
@@ -165,6 +172,70 @@ export default function FlowchartDemoPage() {
   const mermaidCode = useMemo(() => {
     return FlowchartGenerator.generate(currentDefinition);
   }, [currentDefinition]);
+
+  // ノードクリック時のハンドラ
+  const handleNodeClick = useCallback((nodeId: string) => {
+    // クリックされたノードを探す
+    const node = currentDefinition.nodes.find(n => n.id === nodeId);
+    if (node) {
+      setSelectedSourceNode(node);
+      setIsDialogOpen(true);
+    } else {
+      // ラベルで検索（フォールバック）
+      const nodeByLabel = currentDefinition.nodes.find(n => n.label === nodeId);
+      if (nodeByLabel) {
+        setSelectedSourceNode(nodeByLabel);
+        setIsDialogOpen(true);
+      }
+    }
+  }, [currentDefinition.nodes]);
+
+  // 条件追加のハンドラ
+  const handleAddCondition = useCallback((condition: {
+    targetNodeId: string;
+    label: string;
+    style: EdgeStyle;
+    createNewNode?: { id: string; label: string };
+  }) => {
+    if (!selectedSourceNode) return;
+
+    // カスタムモードの場合のみ編集可能
+    if (selectedDemo !== 'custom') {
+      // プリセットをカスタムにコピー
+      setCustomNodes([...currentDefinition.nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        shape: n.shape || 'rectangle' as NodeShape,
+      }))]);
+      setCustomEdges([...currentDefinition.edges.map(e => ({
+        from: e.from,
+        to: e.to,
+        label: e.label || '',
+        style: e.style || 'solid' as EdgeStyle,
+      }))]);
+      setSelectedDemo('custom');
+    }
+
+    // 新規ノードの作成
+    if (condition.createNewNode) {
+      setCustomNodes(prev => [...prev, {
+        id: condition.createNewNode!.id,
+        label: condition.createNewNode!.label,
+        shape: 'rectangle',
+      }]);
+    }
+
+    // エッジの追加
+    setCustomEdges(prev => [...prev, {
+      from: selectedSourceNode.id,
+      to: condition.targetNodeId,
+      label: condition.label,
+      style: condition.style,
+    }]);
+
+    setIsDialogOpen(false);
+    setSelectedSourceNode(null);
+  }, [selectedSourceNode, selectedDemo, currentDefinition]);
 
   // ノード追加
   const addNode = () => {
@@ -198,7 +269,9 @@ export default function FlowchartDemoPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Flowchart Generator Demo</h1>
-            <p className="text-sm text-gray-500 mt-1">JavaScript Object から Mermaid フローチャートを生成</p>
+            <p className="text-sm text-gray-500 mt-1">
+              JavaScript Object から Mermaid フローチャートを生成 ・ ノードをクリックして条件を追加
+            </p>
           </div>
           <a href="/" className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
             ホームに戻る
@@ -232,6 +305,13 @@ export default function FlowchartDemoPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 操作説明 */}
+          <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-800">
+              <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードから新しい接続を追加できます。
+            </p>
           </div>
 
           {/* カスタムエディター */}
@@ -409,12 +489,27 @@ export default function FlowchartDemoPage() {
 
         {/* 右パネル: プレビュー */}
         <div className="flex-1 p-4 bg-gray-50">
-          <h2 className="text-lg font-semibold mb-3">プレビュー</h2>
+          <h2 className="text-lg font-semibold mb-3">プレビュー（ノードをクリックして条件追加）</h2>
           <div className="bg-white rounded-lg shadow-sm h-[calc(100%-40px)]">
-            <MermaidRenderer mermaidCode={mermaidCode} />
+            <FlowchartRenderer
+              mermaidCode={mermaidCode}
+              onNodeClick={handleNodeClick}
+            />
           </div>
         </div>
       </div>
+
+      {/* 条件追加ダイアログ */}
+      <AddConditionDialog
+        isOpen={isDialogOpen}
+        onClose={() => {
+          setIsDialogOpen(false);
+          setSelectedSourceNode(null);
+        }}
+        sourceNode={selectedSourceNode}
+        availableNodes={currentDefinition.nodes}
+        onAddCondition={handleAddCondition}
+      />
     </div>
   );
 }
