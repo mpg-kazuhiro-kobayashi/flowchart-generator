@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import FlowchartRenderer from '@/components/FlowchartRenderer';
 import AddConditionDialog from '@/components/AddConditionDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
+import { validateNodeId } from '@/lib/validation';
 import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption } from '@/types/flowchart';
 
 // 利用可能なノード形状
@@ -221,28 +222,38 @@ export default function Home() {
                 </button>
               </div>
               <div className="space-y-3">
-                {customNodes.map((node, index) => (
+                {customNodes.map((node, index) => {
+                  const idValidation = validateNodeId(node.id);
+                  return (
                   <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                     {/* 基本情報行 */}
                     <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={node.id}
-                        onChange={e => {
-                          const newNodes = [...customNodes];
-                          const oldId = newNodes[index].id;
-                          newNodes[index].id = e.target.value;
-                          setCustomNodes(newNodes);
-                          // エッジのIDも更新
-                          setCustomEdges(customEdges.map(edge => ({
-                            ...edge,
-                            from: edge.from === oldId ? e.target.value : edge.from,
-                            to: edge.to === oldId ? e.target.value : edge.to,
-                          })));
-                        }}
-                        className="w-12 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                        placeholder="ID"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={node.id}
+                          onChange={e => {
+                            const newNodes = [...customNodes];
+                            const oldId = newNodes[index].id;
+                            newNodes[index].id = e.target.value;
+                            setCustomNodes(newNodes);
+                            // エッジのIDも更新
+                            setCustomEdges(customEdges.map(edge => ({
+                              ...edge,
+                              from: edge.from === oldId ? e.target.value : edge.from,
+                              to: edge.to === oldId ? e.target.value : edge.to,
+                            })));
+                          }}
+                          className={`w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900 ${
+                            !idValidation.valid ? 'border-red-500 bg-red-50' : ''
+                          }`}
+                          placeholder="ID"
+                          title={idValidation.message || 'ノードID'}
+                        />
+                        {!idValidation.valid && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center" title={idValidation.message}>!</span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={node.label}
@@ -379,7 +390,8 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

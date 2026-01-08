@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition } from '@/types/flowchart';
+import { validateNodeId } from '@/lib/validation';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -141,7 +142,7 @@ export default function AddConditionDialog({
   // バリデーション
   const isTargetValid = targetType === 'existing'
     ? !!selectedTargetId
-    : !!(newNodeId && newNodeLabel);
+    : !!(newNodeId && newNodeLabel && validateNodeId(newNodeId).valid);
 
   // 分岐条件のバリデーション（設問カテゴリがある場合のみ必須）
   const isConditionValid = (() => {
@@ -253,7 +254,9 @@ export default function AddConditionDialog({
           )}
 
           {/* 新規ノード作成 */}
-          {targetType === 'new' && (
+          {targetType === 'new' && (() => {
+            const idValidation = validateNodeId(newNodeId);
+            return (
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -263,9 +266,15 @@ export default function AddConditionDialog({
                   type="text"
                   value={newNodeId}
                   onChange={e => setNewNodeId(e.target.value)}
-                  placeholder="例: node1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                  placeholder="例: Node1"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 ${
+                    newNodeId && !idValidation.valid ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                  }`}
                 />
+                {newNodeId && !idValidation.valid && (
+                  <p className="mt-1 text-xs text-red-600">{idValidation.message}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">英字で始まり、英数字とアンダースコアのみ使用可能</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -280,7 +289,8 @@ export default function AddConditionDialog({
                 />
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 自由入力の警告（FAの場合） */}
           {isFreeAnswer && (

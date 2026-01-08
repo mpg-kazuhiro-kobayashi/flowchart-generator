@@ -46,6 +46,7 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
 
         // ノードIDからMermaidのノードIDを抽出
         // 形式: flowchart-{nodeId}-{index} または node-{nodeId}-{index}
+        // ノードIDにはハイフンを含めないようバリデーションしているため、単純なマッチで対応
         const match = nodeId.match(/(?:flowchart|node)-([^-]+)/);
         const extractedId = match ? match[1] : null;
 
