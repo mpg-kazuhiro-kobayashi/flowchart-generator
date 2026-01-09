@@ -293,11 +293,21 @@ export default function Home() {
 
   // ノードクリック時のハンドラ
   const handleNodeClick = useCallback((nodeId: string) => {
+    // 状態ノードはクリックしてもダイアログを表示しない
+    if (isStateNode(nodeId)) {
+      return;
+    }
+
     // クリックされたノードを探す
     let node = currentDefinition.nodes.find(n => n.id === nodeId);
     if (!node) {
       // ラベルで検索（フォールバック）
       node = currentDefinition.nodes.find(n => n.label === nodeId);
+    }
+
+    // ラベルで見つかった場合も状態ノードかチェック
+    if (node && isStateNode(node.id)) {
+      return;
     }
 
     if (node) {
