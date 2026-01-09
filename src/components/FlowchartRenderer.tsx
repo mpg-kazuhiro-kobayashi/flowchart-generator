@@ -6,9 +6,11 @@ import mermaid from 'mermaid';
 interface FlowchartRendererProps {
   mermaidCode: string;
   onNodeClick?: (nodeId: string) => void;
+  /** 未網羅のノードID配列 */
+  uncoveredNodeIds?: string[];
 }
 
-export default function FlowchartRenderer({ mermaidCode, onNodeClick }: FlowchartRendererProps) {
+export default function FlowchartRenderer({ mermaidCode, onNodeClick, uncoveredNodeIds = [] }: FlowchartRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +26,30 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
       },
     });
   }, []);
+
+  // ノードIDを抽出するヘルパー関数
+  const extractNodeId = useCallback((domNodeId: string): string | null => {
+    // 形式: flowchart-{nodeId}-{index} または node-{nodeId}-{index}
+    const match = domNodeId.match(/(?:flowchart|node)-([^-]+)/);
+    return match ? match[1] : null;
+  }, []);
+
+  // 未網羅ノードにスタイルを適用
+  const applyUncoveredStyles = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const nodes = containerRef.current.querySelectorAll('.node');
+    nodes.forEach((node) => {
+      const nodeElement = node as HTMLElement;
+      const extractedId = extractNodeId(nodeElement.id);
+
+      if (extractedId && uncoveredNodeIds.includes(extractedId)) {
+        nodeElement.classList.add('uncovered');
+      } else {
+        nodeElement.classList.remove('uncovered');
+      }
+    });
+  }, [uncoveredNodeIds, extractNodeId]);
 
   const addClickEventListeners = useCallback(() => {
     if (!containerRef.current || !onNodeClick) return;
@@ -44,11 +70,7 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
         const nodeElement = node as HTMLElement;
         const nodeId = nodeElement.id;
 
-        // ノードIDからMermaidのノードIDを抽出
-        // 形式: flowchart-{nodeId}-{index} または node-{nodeId}-{index}
-        // ノードIDにはハイフンを含めないようバリデーションしているため、単純なマッチで対応
-        const match = nodeId.match(/(?:flowchart|node)-([^-]+)/);
-        const extractedId = match ? match[1] : null;
+        const extractedId = extractNodeId(nodeId);
 
         if (extractedId) {
           onNodeClick(extractedId);
@@ -64,7 +86,7 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
 
       node.addEventListener('click', handleClick);
     });
-  }, [onNodeClick]);
+  }, [onNodeClick, extractNodeId]);
 
   useEffect(() => {
     if (!containerRef.current || !mermaidCode.trim()) return;
@@ -82,6 +104,9 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
 
           // クリックイベントを追加
           addClickEventListeners();
+
+          // 未網羅ノードにスタイルを適用
+          applyUncoveredStyles();
         }
       } catch (error) {
         console.error('Mermaid rendering error:', error);
@@ -92,7 +117,12 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
     };
 
     renderMermaid();
-  }, [mermaidCode, addClickEventListeners]);
+  }, [mermaidCode, addClickEventListeners, applyUncoveredStyles]);
+
+  // uncoveredNodeIds が変更されたときにスタイルを再適用
+  useEffect(() => {
+    applyUncoveredStyles();
+  }, [uncoveredNodeIds, applyUncoveredStyles]);
 
   return (
     <div className="w-full h-full relative">
@@ -120,6 +150,20 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick }: Flowchar
 
         .node.selected {
           filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) !important;
+        }
+
+        /* 未網羅ノードのスタイル */
+        .node.uncovered rect,
+        .node.uncovered polygon,
+        .node.uncovered circle,
+        .node.uncovered ellipse,
+        .node.uncovered path {
+          stroke: #f59e0b !important;
+          stroke-width: 3px !important;
+        }
+
+        .node.uncovered {
+          filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.5)) !important;
         }
 
         .error-box {

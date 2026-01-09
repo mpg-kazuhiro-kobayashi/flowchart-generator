@@ -48,6 +48,13 @@ export interface NodeUpdateResult {
   choices?: ChoiceOption[];
 }
 
+/** 網羅性チェック結果 */
+export interface CoverageInfo {
+  unusedChoices: ChoiceOption[];
+  isCovered: boolean;
+  hasOutgoingEdges: boolean;
+}
+
 interface NodeEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,6 +64,8 @@ interface NodeEditDialogProps {
   onAddCondition: (condition: AddConditionResult) => void;
   onUpdateNode: (nodeId: string, update: NodeUpdateResult) => void;
   onDeleteNode?: (nodeId: string) => void;
+  /** 網羅性チェック結果 */
+  coverageInfo?: CoverageInfo;
 }
 
 const edgeStyleOptions: { value: EdgeStyle; label: string; description: string }[] = [
@@ -77,6 +86,7 @@ export default function NodeEditDialog({
   onAddCondition,
   onUpdateNode,
   onDeleteNode,
+  coverageInfo,
 }: NodeEditDialogProps) {
   // タブ状態
   const [activeTab, setActiveTab] = useState<TabType>('settings');
@@ -306,6 +316,27 @@ export default function NodeEditDialog({
             「{sourceNode.label}」({sourceNode.id})
           </p>
         </div>
+
+        {/* 網羅性警告 */}
+        {coverageInfo && !coverageInfo.isCovered && (
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm">
+                <p className="font-medium text-amber-800">
+                  {!coverageInfo.hasOutgoingEdges ? '出力エッジがありません' : '未使用の選択肢があります'}
+                </p>
+                {coverageInfo.unusedChoices.length > 0 && (
+                  <p className="text-amber-700 mt-1">
+                    未使用: {coverageInfo.unusedChoices.map(c => c.label).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* タブ */}
         <div className="flex border-b border-gray-200">

@@ -2,7 +2,7 @@
  * フローチャートのグラフ構造を解析するユーティリティ関数
  */
 
-import { QuestionCategory } from '@/types/flowchart';
+import { QuestionCategory, ChoiceOption, SingleCondition } from '@/types/flowchart';
 
 // 状態ノードのプレフィックス
 const STATE_NODE_PREFIX = '_state_';
@@ -20,19 +20,110 @@ export function isStateNode(nodeId: string): boolean {
 interface GraphNode {
   id: string;
   questionCategory?: QuestionCategory;
+  choices?: ChoiceOption[];
   compoundCondition?: {
-    conditions: Array<{
-      nodeId: string;
-    }>;
+    conditions: SingleCondition[];
   };
 }
 
 /**
- * エッジの型定義
+ * エッジの型定義（条件情報を含む）
  */
 interface GraphEdge {
   from: string;
   to: string;
+  label?: string;
+}
+
+/**
+ * 網羅性チェック結果
+ */
+export interface CoverageResult {
+  /** ノードID */
+  nodeId: string;
+  /** 設問カテゴリ */
+  questionCategory: QuestionCategory;
+  /** 全選択肢 */
+  allChoices: ChoiceOption[];
+  /** 使用済み選択肢ID */
+  usedChoiceIds: string[];
+  /** 未使用選択肢 */
+  unusedChoices: ChoiceOption[];
+  /** 網羅されているか */
+  isCovered: boolean;
+  /** 出力エッジがあるか */
+  hasOutgoingEdges: boolean;
+}
+
+/**
+ * 設問ノードの選択肢網羅性をチェック
+ *
+ * @param nodes 全ノードの配列
+ * @param edges 全エッジの配列
+ * @returns 各設問ノードの網羅性チェック結果
+ */
+export function checkChoiceCoverage<T extends GraphNode>(
+  nodes: T[],
+  edges: GraphEdge[]
+): CoverageResult[] {
+  const results: CoverageResult[] = [];
+
+  // SA/MAノードを抽出
+  const questionNodes = nodes.filter(
+    node => (node.questionCategory === 'SA' || node.questionCategory === 'MA') &&
+            node.choices &&
+            node.choices.length > 0 &&
+            !isStateNode(node.id)
+  );
+
+  for (const node of questionNodes) {
+    const choices = node.choices!;
+    const usedChoiceIds = new Set<string>();
+
+    // このノードから出るエッジを検索
+    const outgoingEdges = edges.filter(edge => edge.from === node.id);
+
+    // エッジのラベルから使用されている選択肢を抽出
+    for (const edge of outgoingEdges) {
+      if (edge.label) {
+        // ラベルに含まれる選択肢を探す
+        for (const choice of choices) {
+          if (edge.label.includes(choice.label)) {
+            usedChoiceIds.add(choice.id);
+          }
+        }
+      }
+    }
+
+    // 複合条件（状態ノード）で使用されている選択肢もチェック
+    const stateNodes = nodes.filter(n => isStateNode(n.id) && n.compoundCondition);
+    for (const stateNode of stateNodes) {
+      if (!stateNode.compoundCondition) continue;
+
+      for (const condition of stateNode.compoundCondition.conditions) {
+        if (condition.nodeId === node.id && condition.choiceCondition) {
+          for (const choiceId of condition.choiceCondition.choiceIds) {
+            usedChoiceIds.add(choiceId);
+          }
+        }
+      }
+    }
+
+    const unusedChoices = choices.filter(c => !usedChoiceIds.has(c.id));
+    const hasOutgoingEdges = outgoingEdges.length > 0;
+
+    results.push({
+      nodeId: node.id,
+      questionCategory: node.questionCategory!,
+      allChoices: choices,
+      usedChoiceIds: Array.from(usedChoiceIds),
+      unusedChoices,
+      isCovered: unusedChoices.length === 0 && hasOutgoingEdges,
+      hasOutgoingEdges,
+    });
+  }
+
+  return results;
 }
 
 /**
