@@ -104,16 +104,155 @@ const generateStateNodeLabel = (conditions: CompoundCondition['conditions'], nod
 export default function Home() {
   // カスタムエディター用の状態
   const [customNodes, setCustomNodes] = useState<CustomNode[]>([
-    { id: 'A', label: 'Start', shape: 'stadium' },
-    { id: 'B', label: 'Process', shape: 'rectangle' },
-    { id: 'C', label: 'End', shape: 'stadium' },
+    {
+      "id": "A",
+      "label": "Node A",
+      "shape": "rectangle",
+      "questionCategory": "MA",
+      "choices": [
+        {
+          "id": "A_opt1",
+          "label": "選択肢1"
+        },
+        {
+          "id": "A_opt2",
+          "label": "選択肢2"
+        },
+        {
+          "id": "A_opt3",
+          "label": "選択肢3"
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "label": "Node B",
+      "shape": "rectangle",
+      "questionCategory": "SA",
+      "choices": [
+        {
+          "id": "B_opt1",
+          "label": "YES"
+        },
+        {
+          "id": "B_opt2",
+          "label": "NO"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "label": "Node C",
+      "shape": "rectangle"
+    },
+    {
+      "id": "_state_A_A_opt1_A_opt2_B_B_opt1",
+      "label": "Node A: 選択肢1, 選択肢2 AND Node B: YES",
+      "shape": "hexagon",
+      "compoundCondition": {
+        "conditions": [
+          {
+            "nodeId": "A",
+            "conditionType": "choice",
+            "choiceCondition": {
+              "choiceIds": [
+                "A_opt1",
+                "A_opt2"
+              ]
+            }
+          },
+          {
+            "nodeId": "B",
+            "conditionType": "choice",
+            "choiceCondition": {
+              "choiceIds": [
+                "B_opt1"
+              ]
+            }
+          }
+        ],
+        "operator": "AND"
+      }
+    },
+    {
+      "id": "E",
+      "label": "Node E",
+      "shape": "rectangle"
+    },
+    {
+      "id": "_state_A_A_opt3_B_B_opt1",
+      "label": "Node A: 選択肢3 AND Node B: YES",
+      "shape": "hexagon",
+      "compoundCondition": {
+        "conditions": [
+          {
+            "nodeId": "A",
+            "conditionType": "choice",
+            "choiceCondition": {
+              "choiceIds": [
+                "A_opt3"
+              ]
+            }
+          },
+          {
+            "nodeId": "B",
+            "conditionType": "choice",
+            "choiceCondition": {
+              "choiceIds": [
+                "B_opt1"
+              ]
+            }
+          }
+        ],
+        "operator": "AND"
+      }
+    },
+    {
+      "id": "G",
+      "label": "Node G",
+      "shape": "rectangle"
+    }
   ]);
 
   // 選択肢編集中のノードインデックス
   const [editingChoicesIndex, setEditingChoicesIndex] = useState<number | null>(null);
   const [customEdges, setCustomEdges] = useState<Array<{ from: string; to: string; label: string; style: EdgeStyle }>>([
-    { from: 'A', to: 'B', label: '', style: 'solid' },
-    { from: 'B', to: 'C', label: '', style: 'solid' },
+    {
+      "from": "A",
+      "to": "B",
+      "label": "選択肢1, 選択肢2, 選択肢3",
+      "style": "solid"
+    },
+    {
+      "from": "B",
+      "to": "_state_A_A_opt1_A_opt2_B_B_opt1",
+      "label": "Node A: 選択肢1, 選択肢2 AND Node B: YES",
+      "style": "dotted"
+    },
+    {
+      "from": "_state_A_A_opt1_A_opt2_B_B_opt1",
+      "to": "C",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "B",
+      "to": "_state_A_A_opt3_B_B_opt1",
+      "label": "Node A: 選択肢3 AND Node B: YES",
+      "style": "dotted"
+    },
+    {
+      "from": "_state_A_A_opt3_B_B_opt1",
+      "to": "E",
+      "label": "",
+      "style": "solid"
+    },
+    {
+      "from": "B",
+      "to": "G",
+      "label": "NO",
+      "style": "solid"
+    }
   ]);
 
   // ダイアログ用の状態
