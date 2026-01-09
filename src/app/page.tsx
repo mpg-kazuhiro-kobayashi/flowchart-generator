@@ -5,7 +5,8 @@ import FlowchartRenderer from '@/components/FlowchartRenderer';
 import AddConditionDialog from '@/components/AddConditionDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { validateNodeId } from '@/lib/validation';
-import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption } from '@/types/flowchart';
+import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption, STATE_NODE_PREFIX, CompoundCondition } from '@/types/flowchart';
+import { AddConditionResult } from '@/components/AddConditionDialog';
 
 // 利用可能なノード形状
 const nodeShapes: { value: NodeShape; label: string }[] = [
@@ -49,7 +50,56 @@ interface CustomNode {
   shape: NodeShape;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
+  /** 状態ノードの場合、対応する複合条件 */
+  compoundCondition?: CompoundCondition;
 }
+
+/**
+ * 状態ノードかどうかを判定
+ */
+const isStateNode = (nodeId: string): boolean => {
+  return nodeId.startsWith(STATE_NODE_PREFIX);
+};
+
+/**
+ * 複合条件から状態ノードのIDを生成
+ */
+const generateStateNodeId = (conditions: CompoundCondition['conditions']): string => {
+  const parts = conditions.map(c => {
+    if (c.conditionType === 'choice' && c.choiceCondition) {
+      return `${c.nodeId}_${c.choiceCondition.choiceIds.join('_')}`;
+    }
+    if (c.conditionType === 'numeric' && c.numericCondition) {
+      return `${c.nodeId}_${c.numericCondition.operator}${c.numericCondition.value}`;
+    }
+    return c.nodeId;
+  });
+  return `${STATE_NODE_PREFIX}${parts.join('_')}`;
+};
+
+/**
+ * 複合条件からラベルを生成
+ */
+const generateStateNodeLabel = (conditions: CompoundCondition['conditions'], nodes: CustomNode[]): string => {
+  const parts = conditions.map(c => {
+    const node = nodes.find(n => n.id === c.nodeId);
+    const nodeName = node?.label || c.nodeId;
+
+    if (c.conditionType === 'choice' && c.choiceCondition) {
+      const choiceLabels = c.choiceCondition.choiceIds.map(choiceId => {
+        const choice = node?.choices?.find(ch => ch.id === choiceId);
+        return choice?.label || choiceId;
+      });
+      return `${nodeName}: ${choiceLabels.join(', ')}`;
+    }
+    if (c.conditionType === 'numeric' && c.numericCondition) {
+      const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[c.numericCondition.operator];
+      return `${nodeName} ${opSymbol} ${c.numericCondition.value}`;
+    }
+    return nodeName;
+  });
+  return parts.join(' AND ');
+};
 
 export default function Home() {
   // カスタムエディター用の状態
@@ -69,6 +119,25 @@ export default function Home() {
   // ダイアログ用の状態
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedSourceNode, setSelectedSourceNode] = useState<FlowchartNode | null>(null);
+
+  // サイドパネル表示用（状態ノードを除外）
+  const displayNodes = useMemo(() => {
+    return customNodes.filter(node => !isStateNode(node.id));
+  }, [customNodes]);
+
+  // サイドパネル表示用エッジ（状態ノード関連を除外）
+  const displayEdges = useMemo(() => {
+    return customEdges.filter(edge => !isStateNode(edge.from) && !isStateNode(edge.to));
+  }, [customEdges]);
+
+  // 条件設定可能なノード一覧（SA/MA/NA の設問ノード、FAは分岐不可なので除外）
+  const conditionNodes = useMemo(() => {
+    return customNodes.filter(node =>
+      node.questionCategory &&
+      node.questionCategory !== 'FA' &&
+      !isStateNode(node.id)
+    );
+  }, [customNodes]);
 
   // フローチャート定義
   const currentDefinition = useMemo((): FlowchartDefinition => {
@@ -107,34 +176,87 @@ export default function Home() {
   }, [currentDefinition.nodes]);
 
   // 条件追加のハンドラ
-  const handleAddCondition = useCallback((condition: {
-    targetNodeId: string;
-    label: string;
-    style: EdgeStyle;
-    createNewNode?: { id: string; label: string };
-  }) => {
+  const handleAddCondition = useCallback((result: AddConditionResult) => {
     if (!selectedSourceNode) return;
 
     // 新規ノードの作成
-    if (condition.createNewNode) {
+    if (result.createNewNode) {
       setCustomNodes(prev => [...prev, {
-        id: condition.createNewNode!.id,
-        label: condition.createNewNode!.label,
+        id: result.createNewNode!.id,
+        label: result.createNewNode!.label,
         shape: 'rectangle',
       }]);
     }
 
-    // エッジの追加
-    setCustomEdges(prev => [...prev, {
-      from: selectedSourceNode.id,
-      to: condition.targetNodeId,
-      label: condition.label,
-      style: condition.style,
-    }]);
+    // 複合条件の場合
+    if (result.compoundCondition && result.compoundCondition.conditions.length > 0) {
+      const stateNodeId = generateStateNodeId(result.compoundCondition.conditions);
+      const stateNodeLabel = generateStateNodeLabel(result.compoundCondition.conditions, customNodes);
+
+      // 既存の状態ノードがあるか確認
+      const existingStateNode = customNodes.find(n => n.id === stateNodeId);
+
+      if (!existingStateNode) {
+        // 状態ノードを作成
+        setCustomNodes(prev => [...prev, {
+          id: stateNodeId,
+          label: stateNodeLabel,
+          shape: 'hexagon',
+          compoundCondition: result.compoundCondition,
+        }]);
+      }
+
+      // 各条件ノードから状態ノードへのエッジを追加
+      const newEdges: Array<{ from: string; to: string; label: string; style: EdgeStyle }> = [];
+
+      for (const cond of result.compoundCondition.conditions) {
+        // 既に同じエッジがあるか確認
+        const edgeExists = customEdges.some(e => e.from === cond.nodeId && e.to === stateNodeId);
+        if (!edgeExists) {
+          let edgeLabel = '';
+          if (cond.conditionType === 'choice' && cond.choiceCondition) {
+            const node = customNodes.find(n => n.id === cond.nodeId);
+            const choiceLabels = cond.choiceCondition.choiceIds.map(choiceId => {
+              const choice = node?.choices?.find(ch => ch.id === choiceId);
+              return choice?.label || choiceId;
+            });
+            edgeLabel = choiceLabels.join(', ');
+          } else if (cond.conditionType === 'numeric' && cond.numericCondition) {
+            const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[cond.numericCondition.operator];
+            edgeLabel = `${opSymbol} ${cond.numericCondition.value}`;
+          }
+
+          newEdges.push({
+            from: cond.nodeId,
+            to: stateNodeId,
+            label: edgeLabel,
+            style: 'dotted',
+          });
+        }
+      }
+
+      // 状態ノードから接続先へのエッジを追加
+      newEdges.push({
+        from: stateNodeId,
+        to: result.targetNodeId,
+        label: result.label,
+        style: result.style,
+      });
+
+      setCustomEdges(prev => [...prev, ...newEdges]);
+    } else {
+      // 単一条件の場合（従来の動作）
+      setCustomEdges(prev => [...prev, {
+        from: selectedSourceNode.id,
+        to: result.targetNodeId,
+        label: result.label,
+        style: result.style,
+      }]);
+    }
 
     setIsDialogOpen(false);
     setSelectedSourceNode(null);
-  }, [selectedSourceNode]);
+  }, [selectedSourceNode, customNodes, customEdges]);
 
   // ノード追加
   const addNode = () => {
@@ -222,10 +344,11 @@ export default function Home() {
                 </button>
               </div>
               <div className="space-y-3">
-                {customNodes.map((node, index) => {
+                {displayNodes.map((node) => {
+                  const index = customNodes.findIndex(n => n.id === node.id);
                   const idValidation = validateNodeId(node.id);
                   return (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div key={node.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                     {/* 基本情報行 */}
                     <div className="flex gap-2 items-center">
                       <div className="relative">
@@ -408,8 +531,10 @@ export default function Home() {
                 </button>
               </div>
               <div className="space-y-2">
-                {customEdges.map((edge, index) => (
-                  <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
+                {displayEdges.map((edge) => {
+                  const index = customEdges.findIndex(e => e.from === edge.from && e.to === edge.to && e.label === edge.label);
+                  return (
+                  <div key={`${edge.from}-${edge.to}-${index}`} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
                     <select
                       value={edge.from}
                       onChange={e => {
@@ -419,7 +544,7 @@ export default function Home() {
                       }}
                       className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                     >
-                      {customNodes.map(node => (
+                      {displayNodes.map(node => (
                         <option key={node.id} value={node.id}>
                           {node.id}
                         </option>
@@ -449,7 +574,7 @@ export default function Home() {
                       }}
                       className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                     >
-                      {customNodes.map(node => (
+                      {displayNodes.map(node => (
                         <option key={node.id} value={node.id}>
                           {node.id}
                         </option>
@@ -473,7 +598,8 @@ export default function Home() {
                       削除
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -515,7 +641,8 @@ export default function Home() {
           setSelectedSourceNode(null);
         }}
         sourceNode={selectedSourceNode}
-        availableNodes={currentDefinition.nodes}
+        availableNodes={currentDefinition.nodes.filter(n => !isStateNode(n.id))}
+        conditionNodes={conditionNodes}
         onAddCondition={handleAddCondition}
       />
     </div>

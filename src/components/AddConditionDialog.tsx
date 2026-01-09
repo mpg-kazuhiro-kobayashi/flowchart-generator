@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition } from '@/types/flowchart';
+import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
 import { validateNodeId } from '@/lib/validation';
 
 // 数値演算子のオプション
@@ -13,6 +13,12 @@ const numericOperators: { value: NumericOperator; label: string; symbol: string 
   { value: 'lte', label: '以下', symbol: '<=' },
 ];
 
+/** 複合条件用のノード定義（questionCategory と choices を含む） */
+interface ConditionNode extends FlowchartNode {
+  questionCategory?: QuestionCategory;
+  choices?: ChoiceOption[];
+}
+
 export interface AddConditionResult {
   targetNodeId: string;
   label: string;
@@ -22,6 +28,8 @@ export interface AddConditionResult {
     label: string;
   };
   condition?: EdgeCondition;
+  /** 複合条件（複数の設問ノードの組み合わせ） */
+  compoundCondition?: CompoundCondition;
 }
 
 interface AddConditionDialogProps {
@@ -29,6 +37,8 @@ interface AddConditionDialogProps {
   onClose: () => void;
   sourceNode: FlowchartNode | null;
   availableNodes: FlowchartNode[];
+  /** 複合条件設定可能なノード一覧（SA/MA/NAの設問ノード） */
+  conditionNodes?: ConditionNode[];
   onAddCondition: (condition: AddConditionResult) => void;
 }
 
@@ -44,6 +54,7 @@ export default function AddConditionDialog({
   onClose,
   sourceNode,
   availableNodes,
+  conditionNodes = [],
   onAddCondition,
 }: AddConditionDialogProps) {
   const [targetType, setTargetType] = useState<'existing' | 'new'>('existing');
@@ -58,6 +69,10 @@ export default function AddConditionDialog({
   const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
   const [numericValue, setNumericValue] = useState<string>('');
 
+  // 複合条件用の状態
+  const [useCompoundCondition, setUseCompoundCondition] = useState(false);
+  const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
+
   // ダイアログが開いたときに状態をリセット
   useEffect(() => {
     if (isOpen) {
@@ -70,6 +85,8 @@ export default function AddConditionDialog({
       setSelectedChoiceIds([]);
       setNumericOperator('eq');
       setNumericValue('');
+      setUseCompoundCondition(false);
+      setCompoundConditions(new Map());
     }
   }, [isOpen, availableNodes]);
 
@@ -100,7 +117,35 @@ export default function AddConditionDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 分岐条件を構築
+    // 複合条件の場合
+    if (useCompoundCondition && compoundConditions.size >= 2) {
+      const conditions = Array.from(compoundConditions.values());
+      const compoundCondition: CompoundCondition = {
+        conditions,
+        operator: 'AND',
+      };
+
+      const targetNodeId = targetType === 'existing' ? selectedTargetId : newNodeId;
+      const result: AddConditionResult = {
+        targetNodeId,
+        label: conditionLabel,
+        style: edgeStyle,
+        compoundCondition,
+      };
+
+      if (targetType === 'new' && newNodeId && newNodeLabel) {
+        result.createNewNode = {
+          id: newNodeId,
+          label: newNodeLabel,
+        };
+      }
+
+      onAddCondition(result);
+      onClose();
+      return;
+    }
+
+    // 単一条件の場合（従来の動作）
     let condition: EdgeCondition | undefined;
     if (hasChoices && selectedChoiceIds.length > 0) {
       condition = { choiceIds: selectedChoiceIds };
@@ -139,13 +184,29 @@ export default function AddConditionDialog({
     onClose();
   };
 
+  // 複合条件を更新するヘルパー関数
+  const updateCompoundCondition = (nodeId: string, condition: SingleCondition | null) => {
+    const newConditions = new Map(compoundConditions);
+    if (condition) {
+      newConditions.set(nodeId, condition);
+    } else {
+      newConditions.delete(nodeId);
+    }
+    setCompoundConditions(newConditions);
+  };
+
   // バリデーション
   const isTargetValid = targetType === 'existing'
     ? !!selectedTargetId
     : !!(newNodeId && newNodeLabel && validateNodeId(newNodeId).valid);
 
-  // 分岐条件のバリデーション（設問カテゴリがある場合のみ必須）
+  // 分岐条件のバリデーション
   const isConditionValid = (() => {
+    // 複合条件の場合
+    if (useCompoundCondition) {
+      return compoundConditions.size >= 2; // 2つ以上の条件が必要
+    }
+    // 単一条件の場合
     if (!questionCategory) return true; // 設問なしの場合は条件不要
     if (isFreeAnswer) return false; // FAは分岐不可
     if (hasChoices) return selectedChoiceIds.length > 0;
@@ -292,8 +353,175 @@ export default function AddConditionDialog({
             );
           })()}
 
+          {/* 複合条件の切り替え（条件設定可能なノードが2つ以上ある場合のみ表示） */}
+          {conditionNodes.length >= 2 && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCompoundCondition}
+                  onChange={e => {
+                    setUseCompoundCondition(e.target.checked);
+                    if (!e.target.checked) {
+                      setCompoundConditions(new Map());
+                    }
+                  }}
+                  className="w-4 h-4 text-purple-600 rounded"
+                />
+                <span className="text-sm font-medium text-purple-800">
+                  複合条件を使用（複数の設問の回答を組み合わせる）
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* 複合条件設定UI */}
+          {useCompoundCondition && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                複合条件: 2つ以上の設問の条件を設定
+                <span className="text-gray-500 text-xs ml-2">（すべてAND条件）</span>
+              </label>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {conditionNodes.map(node => {
+                  const currentCondition = compoundConditions.get(node.id);
+                  const isSelected = !!currentCondition;
+
+                  return (
+                    <div
+                      key={node.id}
+                      className={`p-3 rounded-lg border ${
+                        isSelected ? 'bg-purple-50 border-purple-300' : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900 text-sm">
+                          {node.label}
+                          <span className="text-gray-500 text-xs ml-1">
+                            ({node.questionCategory})
+                          </span>
+                        </span>
+                        {isSelected && (
+                          <button
+                            type="button"
+                            onClick={() => updateCompoundCondition(node.id, null)}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            クリア
+                          </button>
+                        )}
+                      </div>
+
+                      {/* SA/MA の場合: 選択肢を表示 */}
+                      {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
+                        <div className="flex flex-wrap gap-1">
+                          {node.choices.map(choice => {
+                            const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
+                            return (
+                              <button
+                                key={choice.id}
+                                type="button"
+                                onClick={() => {
+                                  if (node.questionCategory === 'SA') {
+                                    // 単一選択
+                                    updateCompoundCondition(node.id, {
+                                      nodeId: node.id,
+                                      conditionType: 'choice',
+                                      choiceCondition: { choiceIds: [choice.id] },
+                                    });
+                                  } else {
+                                    // 複数選択
+                                    const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
+                                    const newChoices = isChoiceSelected
+                                      ? currentChoices.filter(id => id !== choice.id)
+                                      : [...currentChoices, choice.id];
+                                    if (newChoices.length > 0) {
+                                      updateCompoundCondition(node.id, {
+                                        nodeId: node.id,
+                                        conditionType: 'choice',
+                                        choiceCondition: { choiceIds: newChoices },
+                                      });
+                                    } else {
+                                      updateCompoundCondition(node.id, null);
+                                    }
+                                  }
+                                }}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  isChoiceSelected
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                                }`}
+                              >
+                                {choice.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* NA の場合: 数値条件入力 */}
+                      {node.questionCategory === 'NA' && (
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={currentCondition?.numericCondition?.operator || 'eq'}
+                            onChange={e => {
+                              const value = currentCondition?.numericCondition?.value;
+                              if (value !== undefined) {
+                                updateCompoundCondition(node.id, {
+                                  nodeId: node.id,
+                                  conditionType: 'numeric',
+                                  numericCondition: {
+                                    operator: e.target.value as NumericOperator,
+                                    value,
+                                  },
+                                });
+                              }
+                            }}
+                            className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
+                          >
+                            {numericOperators.map(op => (
+                              <option key={op.value} value={op.value}>
+                                {op.symbol}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={currentCondition?.numericCondition?.value ?? ''}
+                            onChange={e => {
+                              const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                              if (value !== undefined) {
+                                updateCompoundCondition(node.id, {
+                                  nodeId: node.id,
+                                  conditionType: 'numeric',
+                                  numericCondition: {
+                                    operator: currentCondition?.numericCondition?.operator || 'eq',
+                                    value,
+                                  },
+                                });
+                              } else {
+                                updateCompoundCondition(node.id, null);
+                              }
+                            }}
+                            placeholder="値"
+                            className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {compoundConditions.size < 2 && (
+                <p className="text-xs text-amber-600">
+                  2つ以上の設問に条件を設定してください
+                </p>
+              )}
+            </div>
+          )}
+
           {/* 自由入力の警告（FAの場合） */}
-          {isFreeAnswer && (
+          {isFreeAnswer && !useCompoundCondition && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-sm text-amber-800">
                 <strong>注意:</strong> 自由入力（FA）の設問は分岐条件を設定できません。
@@ -301,8 +529,8 @@ export default function AddConditionDialog({
             </div>
           )}
 
-          {/* 選択肢による分岐条件（SA/MAの場合） */}
-          {hasChoices && (
+          {/* 選択肢による分岐条件（SA/MAの場合、複合条件を使用していない場合のみ） */}
+          {hasChoices && !useCompoundCondition && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 分岐条件: 選択肢を選択
@@ -347,8 +575,8 @@ export default function AddConditionDialog({
             </div>
           )}
 
-          {/* 数値条件（NAの場合） */}
-          {isNumeric && (
+          {/* 数値条件（NAの場合、複合条件を使用していない場合のみ） */}
+          {isNumeric && !useCompoundCondition && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 分岐条件: 数値条件を設定
@@ -376,8 +604,8 @@ export default function AddConditionDialog({
             </div>
           )}
 
-          {/* 条件ラベル（設問カテゴリがない場合のみ表示） */}
-          {!questionCategory && (
+          {/* 条件ラベル（設問カテゴリがない場合、または複合条件の場合に表示） */}
+          {(!questionCategory || useCompoundCondition) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 条件ラベル（任意）

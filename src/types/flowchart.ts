@@ -51,6 +51,40 @@ export interface NumericCondition {
   value: number;
 }
 
+/**
+ * 複合条件の単一条件
+ * 特定の設問ノードに対する回答条件を表す
+ */
+export interface SingleCondition {
+  /** 条件対象の設問ノードID */
+  nodeId: string;
+  /** 条件の種類 */
+  conditionType: 'choice' | 'numeric';
+  /** 選択肢条件（SA/MA用） */
+  choiceCondition?: {
+    /** 選択肢ID */
+    choiceIds: string[];
+    /** マッチタイプ（MAの場合） */
+    matchType?: 'any' | 'all' | 'exact';
+  };
+  /** 数値条件（NA用） */
+  numericCondition?: NumericCondition;
+}
+
+/**
+ * 複合条件
+ * 複数の設問ノードの回答を組み合わせた条件
+ */
+export interface CompoundCondition {
+  /** 条件の配列 */
+  conditions: SingleCondition[];
+  /** 条件の結合方法（現在はANDのみ対応） */
+  operator: 'AND';
+}
+
+/** 状態ノードのプレフィックス */
+export const STATE_NODE_PREFIX = '_state_';
+
 /** エッジ（矢印）のスタイル */
 export type EdgeStyle =
   | 'solid'          // --> 実線矢印
