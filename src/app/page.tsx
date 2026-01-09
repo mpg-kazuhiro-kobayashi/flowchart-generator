@@ -5,6 +5,7 @@ import FlowchartRenderer from '@/components/FlowchartRenderer';
 import NodeEditDialog, { AddConditionResult, NodeUpdateResult } from '@/components/NodeEditDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { validateNodeId } from '@/lib/validation';
+import { getReachableQuestionNodes } from '@/lib/graphUtils';
 import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption, STATE_NODE_PREFIX, CompoundCondition } from '@/types/flowchart';
 
 // 利用可能なノード形状
@@ -129,14 +130,8 @@ export default function Home() {
     return customEdges.filter(edge => !isStateNode(edge.from) && !isStateNode(edge.to));
   }, [customEdges]);
 
-  // 条件設定可能なノード一覧（SA/MA/NA の設問ノード、FAは分岐不可なので除外）
-  const conditionNodes = useMemo(() => {
-    return customNodes.filter(node =>
-      node.questionCategory &&
-      node.questionCategory !== 'FA' &&
-      !isStateNode(node.id)
-    );
-  }, [customNodes]);
+  // 選択したノードに到達可能な設問ノード（経路解析用）
+  const [reachableConditionNodes, setReachableConditionNodes] = useState<CustomNode[]>([]);
 
   // フローチャート定義
   const currentDefinition = useMemo((): FlowchartDefinition => {
@@ -160,19 +155,25 @@ export default function Home() {
   // ノードクリック時のハンドラ
   const handleNodeClick = useCallback((nodeId: string) => {
     // クリックされたノードを探す
-    const node = currentDefinition.nodes.find(n => n.id === nodeId);
-    if (node) {
-      setSelectedSourceNode(node);
-      setIsDialogOpen(true);
-    } else {
+    let node = currentDefinition.nodes.find(n => n.id === nodeId);
+    if (!node) {
       // ラベルで検索（フォールバック）
-      const nodeByLabel = currentDefinition.nodes.find(n => n.label === nodeId);
-      if (nodeByLabel) {
-        setSelectedSourceNode(nodeByLabel);
-        setIsDialogOpen(true);
-      }
+      node = currentDefinition.nodes.find(n => n.label === nodeId);
     }
-  }, [currentDefinition.nodes]);
+
+    if (node) {
+      // 経路解析: このノードに到達するまでの経路上にある設問ノードを取得
+      const reachableNodes = getReachableQuestionNodes(
+        node.id,
+        customNodes,
+        customEdges
+      );
+
+      setSelectedSourceNode(node);
+      setReachableConditionNodes(reachableNodes);
+      setIsDialogOpen(true);
+    }
+  }, [currentDefinition.nodes, customNodes, customEdges]);
 
   // 条件追加のハンドラ
   const handleAddCondition = useCallback((result: AddConditionResult) => {
@@ -662,6 +663,7 @@ export default function Home() {
         onClose={() => {
           setIsDialogOpen(false);
           setSelectedSourceNode(null);
+          setReachableConditionNodes([]);
         }}
         sourceNode={selectedSourceNode ? {
           ...selectedSourceNode,
@@ -669,7 +671,7 @@ export default function Home() {
           choices: customNodes.find(n => n.id === selectedSourceNode.id)?.choices,
         } : null}
         availableNodes={currentDefinition.nodes.filter(n => !isStateNode(n.id))}
-        conditionNodes={conditionNodes}
+        conditionNodes={reachableConditionNodes}
         onAddCondition={handleAddCondition}
         onUpdateNode={handleUpdateNode}
       />
