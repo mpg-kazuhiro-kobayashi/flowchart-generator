@@ -206,42 +206,40 @@ export default function Home() {
         }]);
       }
 
-      // 各条件ノードから状態ノードへのエッジを追加
-      const newEdges: Array<{ from: string; to: string; label: string; style: EdgeStyle }> = [];
-
-      for (const cond of result.compoundCondition.conditions) {
-        // 既に同じエッジがあるか確認
-        const edgeExists = customEdges.some(e => e.from === cond.nodeId && e.to === stateNodeId);
-        if (!edgeExists) {
-          let edgeLabel = '';
-          if (cond.conditionType === 'choice' && cond.choiceCondition) {
-            const node = customNodes.find(n => n.id === cond.nodeId);
-            const choiceLabels = cond.choiceCondition.choiceIds.map(choiceId => {
-              const choice = node?.choices?.find(ch => ch.id === choiceId);
-              return choice?.label || choiceId;
-            });
-            edgeLabel = choiceLabels.join(', ');
-          } else if (cond.conditionType === 'numeric' && cond.numericCondition) {
-            const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[cond.numericCondition.operator];
-            edgeLabel = `${opSymbol} ${cond.numericCondition.value}`;
-          }
-
-          newEdges.push({
-            from: cond.nodeId,
-            to: stateNodeId,
-            label: edgeLabel,
-            style: 'dotted',
+      // 複合条件のラベルを生成（すべての条件を含む）
+      const compoundLabel = result.compoundCondition.conditions.map(cond => {
+        if (cond.conditionType === 'choice' && cond.choiceCondition) {
+          const node = customNodes.find(n => n.id === cond.nodeId);
+          const choiceLabels = cond.choiceCondition.choiceIds.map(choiceId => {
+            const choice = node?.choices?.find(ch => ch.id === choiceId);
+            return choice?.label || choiceId;
           });
+          return `${node?.label || cond.nodeId}: ${choiceLabels.join(', ')}`;
+        } else if (cond.conditionType === 'numeric' && cond.numericCondition) {
+          const node = customNodes.find(n => n.id === cond.nodeId);
+          const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[cond.numericCondition.operator];
+          return `${node?.label || cond.nodeId} ${opSymbol} ${cond.numericCondition.value}`;
         }
-      }
+        return '';
+      }).filter(s => s).join(' AND ');
 
-      // 状態ノードから接続先へのエッジを追加
-      newEdges.push({
-        from: stateNodeId,
-        to: result.targetNodeId,
-        label: result.label,
-        style: result.style,
-      });
+      // 選択したノード（最後の設問ノード）から状態ノードへのエッジのみ作成
+      const newEdges: Array<{ from: string; to: string; label: string; style: EdgeStyle }> = [
+        // 選択したノードから状態ノードへ（1本のエッジのみ）
+        {
+          from: selectedSourceNode.id,
+          to: stateNodeId,
+          label: compoundLabel,
+          style: 'dotted',
+        },
+        // 状態ノードから接続先へ
+        {
+          from: stateNodeId,
+          to: result.targetNodeId,
+          label: result.label,
+          style: result.style,
+        },
+      ];
 
       setCustomEdges(prev => [...prev, ...newEdges]);
     } else {
