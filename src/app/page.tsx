@@ -2,11 +2,10 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import FlowchartRenderer from '@/components/FlowchartRenderer';
-import AddConditionDialog from '@/components/AddConditionDialog';
+import NodeEditDialog, { AddConditionResult, NodeUpdateResult } from '@/components/NodeEditDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { validateNodeId } from '@/lib/validation';
 import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption, STATE_NODE_PREFIX, CompoundCondition } from '@/types/flowchart';
-import { AddConditionResult } from '@/components/AddConditionDialog';
 
 // 利用可能なノード形状
 const nodeShapes: { value: NodeShape; label: string }[] = [
@@ -257,6 +256,30 @@ export default function Home() {
     setIsDialogOpen(false);
     setSelectedSourceNode(null);
   }, [selectedSourceNode, customNodes, customEdges]);
+
+  // ノード更新のハンドラ
+  const handleUpdateNode = useCallback((nodeId: string, update: NodeUpdateResult) => {
+    setCustomNodes(prev => prev.map(node => {
+      if (node.id !== nodeId) return node;
+
+      const updatedNode: CustomNode = {
+        ...node,
+        label: update.label,
+      };
+
+      if (update.questionCategory) {
+        updatedNode.questionCategory = update.questionCategory;
+        if (update.choices) {
+          updatedNode.choices = update.choices;
+        }
+      } else {
+        delete updatedNode.questionCategory;
+        delete updatedNode.choices;
+      }
+
+      return updatedNode;
+    }));
+  }, []);
 
   // ノード追加
   const addNode = () => {
@@ -633,17 +656,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 条件追加ダイアログ */}
-      <AddConditionDialog
+      {/* ノード編集ダイアログ */}
+      <NodeEditDialog
         isOpen={isDialogOpen}
         onClose={() => {
           setIsDialogOpen(false);
           setSelectedSourceNode(null);
         }}
-        sourceNode={selectedSourceNode}
+        sourceNode={selectedSourceNode ? {
+          ...selectedSourceNode,
+          questionCategory: customNodes.find(n => n.id === selectedSourceNode.id)?.questionCategory,
+          choices: customNodes.find(n => n.id === selectedSourceNode.id)?.choices,
+        } : null}
         availableNodes={currentDefinition.nodes.filter(n => !isStateNode(n.id))}
         conditionNodes={conditionNodes}
         onAddCondition={handleAddCondition}
+        onUpdateNode={handleUpdateNode}
       />
     </div>
   );
