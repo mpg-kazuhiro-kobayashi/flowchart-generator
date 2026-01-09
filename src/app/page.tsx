@@ -419,6 +419,37 @@ export default function Home() {
     }));
   }, []);
 
+  // ノード削除のハンドラ（連鎖削除）
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    // 状態ノードは直接削除不可（UIで非表示のため通常は呼ばれないが念のため）
+    if (isStateNode(nodeId)) {
+      return;
+    }
+
+    // 1. 削除するノードを参照している状態ノードを特定
+    const relatedStateNodes = customNodes.filter(node =>
+      isStateNode(node.id) &&
+      node.compoundCondition?.conditions.some(c => c.nodeId === nodeId)
+    );
+    const stateNodeIds = relatedStateNodes.map(n => n.id);
+
+    // 2. 関連するエッジを削除（ノード自身 + 状態ノード）
+    const newEdges = customEdges.filter(edge =>
+      edge.from !== nodeId &&
+      edge.to !== nodeId &&
+      !stateNodeIds.includes(edge.from) &&
+      !stateNodeIds.includes(edge.to)
+    );
+
+    // 3. ノードを削除（対象ノード + 関連状態ノード）
+    const newNodes = customNodes.filter(node =>
+      node.id !== nodeId && !stateNodeIds.includes(node.id)
+    );
+
+    setCustomNodes(newNodes);
+    setCustomEdges(newEdges);
+  }, [customNodes, customEdges]);
+
   // ノード追加
   const addNode = () => {
     const newId = String.fromCharCode(65 + customNodes.length); // A, B, C...
@@ -811,6 +842,7 @@ export default function Home() {
         conditionNodes={reachableConditionNodes}
         onAddCondition={handleAddCondition}
         onUpdateNode={handleUpdateNode}
+        onDeleteNode={handleDeleteNode}
       />
     </div>
   );
