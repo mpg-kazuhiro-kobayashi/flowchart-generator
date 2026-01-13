@@ -73,13 +73,6 @@ interface NodeEditDialogProps {
   coverageInfo?: CoverageInfo;
 }
 
-const edgeStyleOptions: { value: EdgeStyle; label: string; description: string }[] = [
-  { value: 'solid', label: '実線矢印', description: '-->' },
-  { value: 'dotted', label: '点線矢印', description: '-.->' },
-  { value: 'thick', label: '太線矢印', description: '==>' },
-  { value: 'biDirectional', label: '双方向', description: '<-->' },
-];
-
 type TabType = 'settings' | 'connection';
 
 export default function NodeEditDialog({
@@ -107,7 +100,6 @@ export default function NodeEditDialog({
   const [newNodeId, setNewNodeId] = useState('');
   const [newNodeLabel, setNewNodeLabel] = useState('');
   const [conditionLabel, setConditionLabel] = useState('');
-  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>('solid');
 
   // 分岐条件用の状態
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
@@ -132,7 +124,6 @@ export default function NodeEditDialog({
       setNewNodeId('');
       setNewNodeLabel('');
       setConditionLabel('');
-      setEdgeStyle('solid');
       setSelectedChoiceIds([]);
       setNumericOperator('eq');
       setNumericValue('');
@@ -221,7 +212,7 @@ export default function NodeEditDialog({
       const result: AddConditionResult = {
         targetNodeId,
         label: conditionLabel,
-        style: edgeStyle,
+        style: 'solid',
         compoundCondition,
       };
 
@@ -256,14 +247,14 @@ export default function NodeEditDialog({
       onAddCondition({
         targetNodeId: selectedTargetId,
         label: finalLabel,
-        style: edgeStyle,
+        style: 'solid',
         condition,
       });
     } else if (targetType === 'new' && newNodeId && newNodeLabel) {
       onAddCondition({
         targetNodeId: newNodeId,
         label: finalLabel,
-        style: edgeStyle,
+        style: 'solid',
         createNewNode: {
           id: newNodeId,
           label: newNodeLabel,
@@ -880,36 +871,6 @@ export default function NodeEditDialog({
                   />
                 </div>
               )}
-
-              {/* エッジスタイル */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  矢印のスタイル
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {edgeStyleOptions.map(option => (
-                    <label
-                      key={option.value}
-                      className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
-                        edgeStyle === option.value
-                          ? 'bg-blue-50 border-2 border-blue-500'
-                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="edgeStyle"
-                        value={option.value}
-                        checked={edgeStyle === option.value}
-                        onChange={e => setEdgeStyle(e.target.value as EdgeStyle)}
-                        className="sr-only"
-                      />
-                      <span className="font-medium text-gray-900 text-xs">{option.label}</span>
-                      <span className="text-gray-400 text-xs ml-1">{option.description}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
 
               {/* 接続追加ボタン */}
               <button

@@ -1,17 +1,6 @@
 'use client';
 
-import { CustomNode, CustomEdge, EdgeStyle } from '@/types/flowchart';
-
-// 利用可能なエッジスタイル
-const edgeStyles: { value: EdgeStyle; label: string }[] = [
-  { value: 'solid', label: '実線矢印 -->' },
-  { value: 'dotted', label: '点線矢印 -.->' },
-  { value: 'thick', label: '太線矢印 ==>' },
-  { value: 'solidNoArrow', label: '実線 ---' },
-  { value: 'biDirectional', label: '双方向 <-->' },
-  { value: 'circleEnd', label: '丸終端 --o' },
-  { value: 'crossEnd', label: 'X終端 --x' },
-];
+import { CustomNode, CustomEdge } from '@/types/flowchart';
 
 interface EdgeListProps {
   edges: CustomEdge[];
@@ -52,7 +41,7 @@ export default function EdgeList({
               <select
                 value={edge.from}
                 onChange={e => onUpdateEdge(index, { from: e.target.value })}
-                className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                className="w-20 px-2 py-1 text-xs border rounded bg-white text-gray-900"
               >
                 {displayNodes.map(node => (
                   <option key={node.id} value={node.id}>
@@ -60,21 +49,11 @@ export default function EdgeList({
                   </option>
                 ))}
               </select>
-              <select
-                value={edge.style}
-                onChange={e => onUpdateEdge(index, { style: e.target.value as EdgeStyle })}
-                className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
-              >
-                {edgeStyles.map(style => (
-                  <option key={style.value} value={style.value}>
-                    {style.label}
-                  </option>
-                ))}
-              </select>
+              <span className="text-gray-500">→</span>
               <select
                 value={edge.to}
                 onChange={e => onUpdateEdge(index, { to: e.target.value })}
-                className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                className="w-20 px-2 py-1 text-xs border rounded bg-white text-gray-900"
               >
                 {displayNodes.map(node => (
                   <option key={node.id} value={node.id}>

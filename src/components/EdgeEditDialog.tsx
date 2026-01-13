@@ -12,13 +12,6 @@ const numericOperators: { value: NumericOperator; label: string; symbol: string 
   { value: 'lte', label: '以下', symbol: '<=' },
 ];
 
-const edgeStyleOptions: { value: EdgeStyle; label: string; description: string }[] = [
-  { value: 'solid', label: '実線矢印', description: '-->' },
-  { value: 'dotted', label: '点線矢印', description: '-.->' },
-  { value: 'thick', label: '太線矢印', description: '==>' },
-  { value: 'biDirectional', label: '双方向', description: '<-->' },
-];
-
 /** エッジ情報 */
 export interface EdgeInfo {
   from: string;
@@ -88,7 +81,6 @@ export default function EdgeEditDialog({
 }: EdgeEditDialogProps) {
   // エッジ編集用の状態
   const [edgeLabel, setEdgeLabel] = useState('');
-  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>('solid');
 
   // 単一条件用の状態
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
@@ -105,7 +97,6 @@ export default function EdgeEditDialog({
   useEffect(() => {
     if (isOpen && edge) {
       setEdgeLabel(edge.label);
-      setEdgeStyle(edge.style);
 
       // 複合条件の場合
       if (stateNode?.compoundCondition) {
@@ -191,6 +182,8 @@ export default function EdgeEditDialog({
 
   // 保存処理
   const handleSave = () => {
+    if (!edge) return;
+
     if (isCompoundConditionEdge && onUpdateCompoundCondition) {
       // 複合条件の更新
       const conditions = Array.from(compoundConditions.values());
@@ -222,7 +215,7 @@ export default function EdgeEditDialog({
 
     onUpdateEdge({
       label: finalLabel,
-      style: edgeStyle,
+      style: edge.style,
       condition,
     });
     onClose();
@@ -496,38 +489,6 @@ export default function EdgeEditDialog({
               <p className="text-sm text-amber-800">
                 自由入力（FA）の設問からのエッジには分岐条件を設定できません。
               </p>
-            </div>
-          )}
-
-          {/* エッジスタイル（単一条件の場合のみ） */}
-          {!isCompoundConditionEdge && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                矢印のスタイル
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {edgeStyleOptions.map(option => (
-                  <label
-                    key={option.value}
-                    className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
-                      edgeStyle === option.value
-                        ? 'bg-purple-50 border-2 border-purple-500'
-                        : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="edgeStyle"
-                      value={option.value}
-                      checked={edgeStyle === option.value}
-                      onChange={e => setEdgeStyle(e.target.value as EdgeStyle)}
-                      className="sr-only"
-                    />
-                    <span className="font-medium text-gray-900 text-xs">{option.label}</span>
-                    <span className="text-gray-400 text-xs ml-1">{option.description}</span>
-                  </label>
-                ))}
-              </div>
             </div>
           )}
 

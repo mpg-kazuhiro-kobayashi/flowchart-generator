@@ -1,24 +1,9 @@
 'use client';
 
-import { CustomNode, NodeShape, QuestionCategory } from '@/types/flowchart';
+import { CustomNode, QuestionCategory } from '@/types/flowchart';
 import { validateNodeId } from '@/domain/validation';
 import { CoverageResult } from '@/domain/coverage';
 import { rangeToString } from '@/domain/numericRange';
-
-// 利用可能なノード形状
-const nodeShapes: { value: NodeShape; label: string }[] = [
-  { value: 'rectangle', label: '四角形 [text]' },
-  { value: 'round', label: '角丸 (text)' },
-  { value: 'stadium', label: 'スタジアム ([text])' },
-  { value: 'subroutine', label: 'サブルーチン [[text]]' },
-  { value: 'database', label: 'データベース [(text)]' },
-  { value: 'circle', label: '円 ((text))' },
-  { value: 'doubleCircle', label: '二重円 (((text)))' },
-  { value: 'rhombus', label: 'ひし形 {text}' },
-  { value: 'hexagon', label: '六角形 {{text}}' },
-  { value: 'parallelogram', label: '平行四辺形 [/text/]' },
-  { value: 'trapezoid', label: '台形 [/text\\]' },
-];
 
 // 設問カテゴリ
 const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
@@ -103,17 +88,6 @@ export default function NodeList({
                   className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
                   placeholder="ラベル"
                 />
-                <select
-                  value={node.shape}
-                  onChange={e => onUpdateNode(index, { shape: e.target.value as NodeShape })}
-                  className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                >
-                  {nodeShapes.map(shape => (
-                    <option key={shape.value} value={shape.value}>
-                      {shape.label}
-                    </option>
-                  ))}
-                </select>
                 <button
                   onClick={() => onRemoveNode(index)}
                   className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
