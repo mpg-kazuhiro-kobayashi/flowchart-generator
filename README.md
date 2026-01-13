@@ -10,8 +10,6 @@ JavaScript Objectから自動的にMermaidフローチャートを生成する�
 
 - **フレームワーク**: Next.js 15.4.4 (App Router)
 - **描画ライブラリ**: Mermaid.js 11.9.0
-- **UIライブラリ**: ReactFlow 11.11.4
-- **状態管理**: Zustand 5.0.6
 - **スタイリング**: Tailwind CSS 4
 - **言語**: TypeScript 5
 
@@ -53,6 +51,7 @@ JavaScript Objectから自動的にMermaidフローチャートを生成する�
   /components
     FlowchartRenderer.tsx         # Mermaidフローチャート描画
     NodeEditDialog.tsx            # ノード編集ダイアログ
+    EdgeEditDialog.tsx            # エッジ編集ダイアログ
     AddConditionDialog.tsx        # 条件追加ダイアログ
   /lib
     flowchartGenerator.ts         # フローチャート生成ロジック
@@ -64,6 +63,8 @@ JavaScript Objectから自動的にMermaidフローチャートを生成する�
   compound-condition.md           # 複合条件の実装仕様
   compound-condition-path-analysis.md  # 経路解析の実装方針
   node-deletion.md                # ノード削除機能の仕様
+  na-coverage-check.md            # NA網羅性チェックの実装仕様
+  refactoring-plan.md             # リファクタリング方針
 ```
 
 ## セットアップ・起動
