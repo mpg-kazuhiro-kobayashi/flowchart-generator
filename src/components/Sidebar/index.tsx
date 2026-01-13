@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomNode, CustomEdge, FlowchartDefinition } from '@/types/flowchart';
-import { CoverageResult } from '@/lib/coverageUtils';
+import { CoverageResult } from '@/domain/coverage';
 import NodeList from './NodeList';
 import EdgeList from './EdgeList';
 

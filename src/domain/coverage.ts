@@ -3,7 +3,7 @@
  */
 
 import { QuestionCategory, ChoiceOption, SingleCondition, NumericOperator, isStateNode } from '@/types/flowchart';
-import { NumericRange, operatorToRange, findNumericGaps } from './numericRangeUtils';
+import { NumericRange, operatorToRange, findNumericGaps } from './numericRange';
 
 /**
  * ノードの型定義（最小限の情報）

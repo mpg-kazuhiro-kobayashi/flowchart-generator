@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
-import { validateNodeId } from '@/lib/validation';
-import { NumericRange, rangeToString } from '@/lib/numericRangeUtils';
+import { validateNodeId } from '@/domain/validation';
+import { NumericRange, rangeToString } from '@/domain/numericRange';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [

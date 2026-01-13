@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { CustomNode, CustomEdge, isStateNode } from '@/types/flowchart';
-import { checkChoiceCoverage, CoverageResult } from '@/lib/coverageUtils';
+import { checkChoiceCoverage, CoverageResult } from '@/domain/coverage';
 
 /**
  * フローチャートのノードとエッジの状態管理フック

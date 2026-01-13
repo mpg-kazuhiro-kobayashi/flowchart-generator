@@ -54,3 +54,13 @@ export const generateCompoundConditionLabel = (
 ): string => {
   return generateStateNodeLabel(compoundCondition.conditions, nodes);
 };
+
+/**
+ * 複合条件からエッジ用のラベルを生成（SingleCondition配列版）
+ */
+export const generateCompoundConditionEdgeLabel = (
+  conditions: SingleCondition[],
+  nodes: CustomNode[]
+): string => {
+  return generateStateNodeLabel(conditions, nodes);
+};

@@ -1,9 +1,9 @@
 'use client';
 
 import { CustomNode, NodeShape, QuestionCategory } from '@/types/flowchart';
-import { validateNodeId } from '@/lib/validation';
-import { CoverageResult } from '@/lib/coverageUtils';
-import { rangeToString } from '@/lib/numericRangeUtils';
+import { validateNodeId } from '@/domain/validation';
+import { CoverageResult } from '@/domain/coverage';
+import { rangeToString } from '@/domain/numericRange';
 
 // 利用可能なノード形状
 const nodeShapes: { value: NodeShape; label: string }[] = [

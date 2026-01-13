@@ -6,10 +6,10 @@ import NodeEditDialog, { AddConditionResult, NodeUpdateResult, CoverageInfo } fr
 import EdgeEditDialog, { EdgeUpdateResult, CompoundConditionUpdateResult } from '@/components/EdgeEditDialog';
 import Sidebar from '@/components/Sidebar';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
-import { getReachableQuestionNodes } from '@/lib/graphUtils';
-import { generateStateNodeId, generateStateNodeLabel } from '@/lib/compoundConditionUtils';
-import { useFlowchartState } from '@/hooks/useFlowchartState';
-import { useDialogState } from '@/hooks/useDialogState';
+import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
+import { generateStateNodeId, generateStateNodeLabel, generateCompoundConditionEdgeLabel } from '@/domain/compoundCondition';
+import { useFlowchartState } from '@/lib/hooks/useFlowchartState';
+import { useDialogState } from '@/lib/hooks/useDialogState';
 import {
   FlowchartDefinition,
   CustomNode,
@@ -187,21 +187,7 @@ export default function Home() {
         }]);
       }
 
-      const compoundLabel = result.compoundCondition.conditions.map(cond => {
-        if (cond.conditionType === 'choice' && cond.choiceCondition) {
-          const node = customNodes.find(n => n.id === cond.nodeId);
-          const choiceLabels = cond.choiceCondition.choiceIds.map(choiceId => {
-            const choice = node?.choices?.find(ch => ch.id === choiceId);
-            return choice?.label || choiceId;
-          });
-          return `${node?.label || cond.nodeId}: ${choiceLabels.join(', ')}`;
-        } else if (cond.conditionType === 'numeric' && cond.numericCondition) {
-          const node = customNodes.find(n => n.id === cond.nodeId);
-          const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[cond.numericCondition.operator];
-          return `${node?.label || cond.nodeId} ${opSymbol} ${cond.numericCondition.value}`;
-        }
-        return '';
-      }).filter(s => s).join(' AND ');
+      const compoundLabel = generateCompoundConditionEdgeLabel(result.compoundCondition.conditions, customNodes);
 
       const newEdges: CustomEdge[] = [
         { from: selectedSourceNode.id, to: stateNodeId, label: compoundLabel, style: 'dotted' },
