@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import FlowchartRenderer from '@/components/FlowchartRenderer';
+import FlowchartRenderer, { EdgeClickInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { AddConditionResult, NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
+import EdgeEditDialog, { EdgeInfo, EdgeUpdateResult, SourceNodeInfo, StateNodeInfo, CompoundConditionUpdateResult } from '@/components/EdgeEditDialog';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { validateNodeId } from '@/lib/validation';
 import { getReachableQuestionNodes, checkChoiceCoverage, CoverageResult, rangeToString } from '@/lib/graphUtils';
@@ -255,9 +256,13 @@ export default function Home() {
     }
   ]);
 
-  // ダイアログ用の状態
+  // ノード編集ダイアログ用の状態
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedSourceNode, setSelectedSourceNode] = useState<FlowchartNode | null>(null);
+
+  // エッジ編集ダイアログ用の状態
+  const [isEdgeDialogOpen, setIsEdgeDialogOpen] = useState(false);
+  const [selectedEdgeIndex, setSelectedEdgeIndex] = useState<number | null>(null);
 
   // サイドパネル表示用（状態ノードを除外）
   const displayNodes = useMemo(() => {
@@ -520,6 +525,176 @@ export default function Home() {
       setCustomEdges([...customEdges, { from: customNodes[0].id, to: customNodes[1].id, label: '', style: 'solid' }]);
     }
   };
+
+  // エッジクリック時のハンドラ
+  const handleEdgeClick = useCallback((edgeInfo: EdgeClickInfo) => {
+    let edgeIndex: number | null = null;
+
+    // 1. ラベルでマッチングを試みる（最も信頼性が高い）
+    if (edgeInfo.label) {
+      const foundIndex = customEdges.findIndex(e => e.label === edgeInfo.label);
+      if (foundIndex !== -1) {
+        edgeIndex = foundIndex;
+      }
+    }
+
+    // 2. from/to情報でマッチング
+    if (edgeIndex === null && edgeInfo.fromNodeId && edgeInfo.toNodeId) {
+      const foundIndex = customEdges.findIndex(
+        e => e.from === edgeInfo.fromNodeId && e.to === edgeInfo.toNodeId
+      );
+      if (foundIndex !== -1) {
+        edgeIndex = foundIndex;
+      }
+    }
+
+    // 3. インデックスをフォールバックとして使用（範囲内の場合のみ）
+    if (edgeIndex === null && edgeInfo.edgeIndex >= 0 && edgeInfo.edgeIndex < customEdges.length) {
+      edgeIndex = edgeInfo.edgeIndex;
+    }
+
+    if (edgeIndex !== null) {
+      setSelectedEdgeIndex(edgeIndex);
+      setIsEdgeDialogOpen(true);
+    }
+  }, [customEdges]);
+
+  // エッジ更新のハンドラ
+  const handleUpdateEdge = useCallback((update: EdgeUpdateResult) => {
+    if (selectedEdgeIndex === null) return;
+
+    setCustomEdges(prev => prev.map((edge, index) => {
+      if (index !== selectedEdgeIndex) return edge;
+      return {
+        ...edge,
+        label: update.label,
+        style: update.style,
+        condition: update.condition,
+      };
+    }));
+  }, [selectedEdgeIndex]);
+
+  // エッジ削除のハンドラ（ダイアログから）
+  const handleDeleteEdge = useCallback(() => {
+    if (selectedEdgeIndex === null) return;
+
+    const edgeToDelete = customEdges[selectedEdgeIndex];
+
+    // 状態ノードへのエッジを削除する場合、状態ノードと関連エッジも削除
+    if (edgeToDelete && isStateNode(edgeToDelete.to)) {
+      const stateNodeId = edgeToDelete.to;
+
+      // 状態ノードを削除
+      setCustomNodes(prev => prev.filter(n => n.id !== stateNodeId));
+
+      // 状態ノードに関連するエッジをすべて削除
+      setCustomEdges(prev => prev.filter(e => e.from !== stateNodeId && e.to !== stateNodeId));
+    } else {
+      // 通常のエッジ削除
+      setCustomEdges(prev => prev.filter((_, index) => index !== selectedEdgeIndex));
+    }
+
+    setSelectedEdgeIndex(null);
+  }, [selectedEdgeIndex, customEdges]);
+
+  // 選択中のエッジ情報を取得
+  const selectedEdge = useMemo((): EdgeInfo | null => {
+    if (selectedEdgeIndex === null) return null;
+    const edge = customEdges[selectedEdgeIndex];
+    if (!edge) return null;
+    return {
+      from: edge.from,
+      to: edge.to,
+      label: edge.label,
+      style: edge.style,
+      condition: edge.condition,
+    };
+  }, [selectedEdgeIndex, customEdges]);
+
+  // 選択中のエッジのソースノード情報を取得
+  const selectedEdgeSourceNode = useMemo((): SourceNodeInfo | undefined => {
+    if (!selectedEdge) return undefined;
+    const node = customNodes.find(n => n.id === selectedEdge.from);
+    if (!node) return undefined;
+    return {
+      id: node.id,
+      label: node.label,
+      questionCategory: node.questionCategory,
+      choices: node.choices,
+    };
+  }, [selectedEdge, customNodes]);
+
+  // 選択中のエッジが状態ノードへのエッジかどうか、状態ノード情報を取得
+  const selectedEdgeStateNode = useMemo((): StateNodeInfo | undefined => {
+    if (!selectedEdge) return undefined;
+    // エッジの接続先が状態ノードかチェック
+    if (!isStateNode(selectedEdge.to)) return undefined;
+    const stateNode = customNodes.find(n => n.id === selectedEdge.to);
+    if (!stateNode?.compoundCondition) return undefined;
+    return {
+      id: stateNode.id,
+      label: stateNode.label,
+      compoundCondition: stateNode.compoundCondition,
+    };
+  }, [selectedEdge, customNodes]);
+
+  // 複合条件に関連するノード情報を取得
+  const selectedEdgeConditionNodes = useMemo((): SourceNodeInfo[] => {
+    if (!selectedEdgeStateNode?.compoundCondition) return [];
+    const conditionNodeIds = selectedEdgeStateNode.compoundCondition.conditions.map(c => c.nodeId);
+    return customNodes
+      .filter(n => conditionNodeIds.includes(n.id))
+      .map(n => ({
+        id: n.id,
+        label: n.label,
+        questionCategory: n.questionCategory,
+        choices: n.choices,
+      }));
+  }, [selectedEdgeStateNode, customNodes]);
+
+  // 複合条件更新のハンドラ
+  const handleUpdateCompoundCondition = useCallback((update: CompoundConditionUpdateResult) => {
+    if (selectedEdgeIndex === null || !selectedEdgeStateNode) return;
+
+    const oldStateNodeId = selectedEdgeStateNode.id;
+
+    // 新しい状態ノードIDを生成
+    const newStateNodeId = generateStateNodeId(update.compoundCondition.conditions);
+    const newStateNodeLabel = generateStateNodeLabel(update.compoundCondition.conditions, customNodes);
+
+    // 状態ノードの更新
+    setCustomNodes(prev => prev.map(node => {
+      if (node.id !== oldStateNodeId) return node;
+      return {
+        ...node,
+        id: newStateNodeId,
+        label: newStateNodeLabel,
+        compoundCondition: update.compoundCondition,
+      };
+    }));
+
+    // 関連するエッジのIDを更新
+    setCustomEdges(prev => prev.map(edge => {
+      // 状態ノードへのエッジ（複合条件エッジ）
+      if (edge.to === oldStateNodeId) {
+        return {
+          ...edge,
+          to: newStateNodeId,
+          label: update.label,
+        };
+      }
+      // 状態ノードからのエッジ
+      if (edge.from === oldStateNodeId) {
+        return {
+          ...edge,
+          from: newStateNodeId,
+        };
+      }
+      return edge;
+    }));
+
+    setSelectedEdgeIndex(null);
+  }, [selectedEdgeIndex, selectedEdgeStateNode, customNodes]);
 
   // エッジ削除
   const removeEdge = (index: number) => {
@@ -875,11 +1050,12 @@ export default function Home() {
 
         {/* 右パネル: プレビュー */}
         <div className="flex-1 p-4 bg-gray-50">
-          <h2 className="text-lg font-semibold mb-3 text-gray-900">プレビュー（ノードをクリックして条件追加）</h2>
+          <h2 className="text-lg font-semibold mb-3 text-gray-900">プレビュー（ノード/エッジをクリックして編集）</h2>
           <div className="bg-white rounded-lg shadow-sm h-[calc(100%-40px)]">
             <FlowchartRenderer
               mermaidCode={mermaidCode}
               onNodeClick={handleNodeClick}
+              onEdgeClick={handleEdgeClick}
               uncoveredNodeIds={coverageResults.filter(r => !r.isCovered).map(r => r.nodeId)}
             />
           </div>
@@ -916,6 +1092,22 @@ export default function Home() {
             numericGaps: coverage.numericGaps,
           } as CoverageInfo;
         })() : undefined}
+      />
+
+      {/* エッジ編集ダイアログ */}
+      <EdgeEditDialog
+        isOpen={isEdgeDialogOpen}
+        onClose={() => {
+          setIsEdgeDialogOpen(false);
+          setSelectedEdgeIndex(null);
+        }}
+        edge={selectedEdge}
+        sourceNode={selectedEdgeSourceNode}
+        stateNode={selectedEdgeStateNode}
+        conditionNodes={selectedEdgeConditionNodes}
+        onUpdateEdge={handleUpdateEdge}
+        onUpdateCompoundCondition={handleUpdateCompoundCondition}
+        onDeleteEdge={handleDeleteEdge}
       />
     </div>
   );
