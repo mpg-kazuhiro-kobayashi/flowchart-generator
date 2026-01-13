@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
 import { validateNodeId } from '@/lib/validation';
+import { NumericRange, rangeToString } from '@/lib/graphUtils';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -53,6 +54,10 @@ export interface CoverageInfo {
   unusedChoices: ChoiceOption[];
   isCovered: boolean;
   hasOutgoingEdges: boolean;
+  outgoingEdgeCount: number;
+  questionCategory: QuestionCategory;
+  /** 数値条件のギャップ（NA用） */
+  numericGaps?: NumericRange[];
 }
 
 interface NodeEditDialogProps {
@@ -326,12 +331,26 @@ export default function NodeEditDialog({
               </svg>
               <div className="text-sm">
                 <p className="font-medium text-amber-800">
-                  {!coverageInfo.hasOutgoingEdges ? '出力エッジがありません' : '未使用の選択肢があります'}
+                  {!coverageInfo.hasOutgoingEdges
+                    ? '出力エッジがありません'
+                    : coverageInfo.questionCategory === 'NA'
+                      ? '数値条件が全範囲をカバーしていません'
+                      : '未使用の選択肢があります'}
                 </p>
                 {coverageInfo.unusedChoices.length > 0 && (
                   <p className="text-amber-700 mt-1">
                     未使用: {coverageInfo.unusedChoices.map(c => c.label).join(', ')}
                   </p>
+                )}
+                {coverageInfo.numericGaps && coverageInfo.numericGaps.length > 0 && (
+                  <div className="text-amber-700 mt-1">
+                    <p>未カバー範囲:</p>
+                    <ul className="list-disc list-inside ml-2">
+                      {coverageInfo.numericGaps.map((gap, index) => (
+                        <li key={index}>{rangeToString(gap)}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             </div>
