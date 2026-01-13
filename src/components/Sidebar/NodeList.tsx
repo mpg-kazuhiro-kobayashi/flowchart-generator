@@ -1,0 +1,261 @@
+'use client';
+
+import { CustomNode, NodeShape, QuestionCategory } from '@/types/flowchart';
+import { validateNodeId } from '@/lib/validation';
+import { CoverageResult } from '@/lib/coverageUtils';
+import { rangeToString } from '@/lib/numericRangeUtils';
+
+// 利用可能なノード形状
+const nodeShapes: { value: NodeShape; label: string }[] = [
+  { value: 'rectangle', label: '四角形 [text]' },
+  { value: 'round', label: '角丸 (text)' },
+  { value: 'stadium', label: 'スタジアム ([text])' },
+  { value: 'subroutine', label: 'サブルーチン [[text]]' },
+  { value: 'database', label: 'データベース [(text)]' },
+  { value: 'circle', label: '円 ((text))' },
+  { value: 'doubleCircle', label: '二重円 (((text)))' },
+  { value: 'rhombus', label: 'ひし形 {text}' },
+  { value: 'hexagon', label: '六角形 {{text}}' },
+  { value: 'parallelogram', label: '平行四辺形 [/text/]' },
+  { value: 'trapezoid', label: '台形 [/text\\]' },
+];
+
+// 設問カテゴリ
+const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
+  { value: '', label: '設問なし', description: '通常のノード' },
+  { value: 'SA', label: 'SA（単一選択）', description: '選択肢から1つ選択' },
+  { value: 'MA', label: 'MA（複数選択）', description: '選択肢から複数選択' },
+  { value: 'FA', label: 'FA（自由入力）', description: 'テキスト入力（分岐不可）' },
+  { value: 'NA', label: 'NA（数値入力）', description: '数値入力（条件分岐可能）' },
+];
+
+interface NodeListProps {
+  nodes: CustomNode[];
+  displayNodes: CustomNode[];
+  coverageMap: Map<string, CoverageResult>;
+  editingChoicesIndex: number | null;
+  onAddNode: () => void;
+  onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
+  onRemoveNode: (index: number) => void;
+  onUpdateNodeId: (index: number, oldId: string, newId: string) => void;
+  onToggleChoicesEdit: (index: number) => void;
+  onAddChoice: (nodeIndex: number) => void;
+  onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
+  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => void;
+}
+
+export default function NodeList({
+  nodes,
+  displayNodes,
+  coverageMap,
+  editingChoicesIndex,
+  onAddNode,
+  onUpdateNode,
+  onRemoveNode,
+  onUpdateNodeId,
+  onToggleChoicesEdit,
+  onAddChoice,
+  onRemoveChoice,
+  onUpdateChoice,
+}: NodeListProps) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold text-gray-900">ノード</h3>
+        <button
+          onClick={onAddNode}
+          className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+        >
+          + 追加
+        </button>
+      </div>
+      <div className="space-y-3">
+        {displayNodes.map((node) => {
+          const index = nodes.findIndex(n => n.id === node.id);
+          const idValidation = validateNodeId(node.id);
+          const coverage = coverageMap.get(node.id);
+          const hasWarning = coverage && !coverage.isCovered;
+          return (
+            <div key={node.id} className={`p-3 rounded-lg border ${
+              hasWarning ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
+            }`}>
+              {/* 基本情報行 */}
+              <div className="flex gap-2 items-center">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={node.id}
+                    onChange={e => onUpdateNodeId(index, node.id, e.target.value)}
+                    className={`w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900 ${
+                      !idValidation.valid ? 'border-red-500 bg-red-50' : ''
+                    }`}
+                    placeholder="ID"
+                    title={idValidation.message || 'ノードID'}
+                  />
+                  {!idValidation.valid && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center" title={idValidation.message}>!</span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={node.label}
+                  onChange={e => onUpdateNode(index, { label: e.target.value })}
+                  className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                  placeholder="ラベル"
+                />
+                <select
+                  value={node.shape}
+                  onChange={e => onUpdateNode(index, { shape: e.target.value as NodeShape })}
+                  className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                >
+                  {nodeShapes.map(shape => (
+                    <option key={shape.value} value={shape.value}>
+                      {shape.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => onRemoveNode(index)}
+                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                  削除
+                </button>
+              </div>
+
+              {/* 設問カテゴリ選択 */}
+              <div className="mt-2 flex gap-2 items-center">
+                <span className="text-xs text-gray-600 min-w-16">設問タイプ:</span>
+                <select
+                  value={node.questionCategory || ''}
+                  onChange={e => {
+                    const category = e.target.value as QuestionCategory | '';
+                    if (category) {
+                      const updates: Partial<CustomNode> = { questionCategory: category };
+                      // SA/MAの場合、選択肢がなければ初期化
+                      if ((category === 'SA' || category === 'MA') && !node.choices) {
+                        updates.choices = [];
+                      }
+                      onUpdateNode(index, updates);
+                    } else {
+                      onUpdateNode(index, { questionCategory: undefined, choices: undefined });
+                    }
+                  }}
+                  className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                >
+                  {questionCategories.map(cat => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+                {/* SA/MAの場合、選択肢編集ボタン */}
+                {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                  <button
+                    onClick={() => onToggleChoicesEdit(index)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      editingChoicesIndex === index
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    選択肢 ({node.choices?.length || 0})
+                  </button>
+                )}
+              </div>
+
+              {/* カテゴリの説明 */}
+              {node.questionCategory && (
+                <div className="mt-1">
+                  <span className={`text-xs px-2 py-0.5 rounded ${
+                    node.questionCategory === 'FA' ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {questionCategories.find(c => c.value === node.questionCategory)?.description}
+                    {node.questionCategory === 'FA' && ' - 分岐設定不可'}
+                  </span>
+                </div>
+              )}
+
+              {/* 網羅性警告 */}
+              {coverage && !coverage.isCovered && (
+                <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-xs">
+                  <div className="flex items-center gap-1 text-amber-800 font-medium">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    {!coverage.hasOutgoingEdges
+                      ? '出力エッジがありません'
+                      : coverage.questionCategory === 'NA'
+                        ? '数値条件が全範囲をカバーしていません'
+                        : '未使用の選択肢があります'}
+                  </div>
+                  {coverage.unusedChoices.length > 0 && (
+                    <div className="mt-1 text-amber-700">
+                      未使用: {coverage.unusedChoices.map(c => c.label).join(', ')}
+                    </div>
+                  )}
+                  {coverage.numericGaps && coverage.numericGaps.length > 0 && (
+                    <div className="mt-1 text-amber-700">
+                      <span>未カバー範囲:</span>
+                      <ul className="list-disc list-inside ml-2">
+                        {coverage.numericGaps.map((gap, gapIndex) => (
+                          <li key={gapIndex}>{rangeToString(gap)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 選択肢編集エリア（SA/MA） */}
+              {editingChoicesIndex === index && (node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                <div className="mt-3 p-2 bg-white rounded border border-blue-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-700">選択肢一覧</span>
+                    <button
+                      onClick={() => onAddChoice(index)}
+                      className="px-2 py-0.5 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      + 追加
+                    </button>
+                  </div>
+                  {node.choices && node.choices.length > 0 ? (
+                    <div className="space-y-1">
+                      {node.choices.map((choice, choiceIndex) => (
+                        <div key={choiceIndex} className="flex gap-1 items-center">
+                          <input
+                            type="text"
+                            value={choice.id}
+                            onChange={e => onUpdateChoice(index, choiceIndex, 'id', e.target.value)}
+                            className="w-20 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
+                            placeholder="ID"
+                          />
+                          <input
+                            type="text"
+                            value={choice.label}
+                            onChange={e => onUpdateChoice(index, choiceIndex, 'label', e.target.value)}
+                            className="flex-1 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
+                            placeholder="ラベル"
+                          />
+                          <button
+                            onClick={() => onRemoveChoice(index, choiceIndex)}
+                            className="px-1 py-0.5 text-xs bg-red-400 text-white rounded hover:bg-red-500"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center py-2">
+                      選択肢がありません。「+ 追加」で選択肢を追加してください。
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

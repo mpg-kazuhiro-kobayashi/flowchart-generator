@@ -189,3 +189,30 @@ export interface FlowchartDefinition {
     themeVariables?: Record<string, string>;
   };
 }
+
+/** カスタムノード（エディタ用） */
+export interface CustomNode {
+  id: string;
+  label: string;
+  shape: NodeShape;
+  questionCategory?: QuestionCategory;
+  choices?: ChoiceOption[];
+  /** 状態ノードの場合、対応する複合条件 */
+  compoundCondition?: CompoundCondition;
+}
+
+/** カスタムエッジ（エディタ用） */
+export interface CustomEdge {
+  from: string;
+  to: string;
+  label: string;
+  style: EdgeStyle;
+  condition?: EdgeCondition;
+}
+
+/**
+ * 状態ノードかどうかを判定
+ */
+export const isStateNode = (nodeId: string): boolean => {
+  return nodeId.startsWith(STATE_NODE_PREFIX);
+};

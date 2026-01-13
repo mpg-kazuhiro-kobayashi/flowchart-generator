@@ -1,295 +1,128 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import FlowchartRenderer, { EdgeClickInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { AddConditionResult, NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
-import EdgeEditDialog, { EdgeInfo, EdgeUpdateResult, SourceNodeInfo, StateNodeInfo, CompoundConditionUpdateResult } from '@/components/EdgeEditDialog';
+import EdgeEditDialog, { EdgeUpdateResult, CompoundConditionUpdateResult } from '@/components/EdgeEditDialog';
+import Sidebar from '@/components/Sidebar';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
-import { validateNodeId } from '@/lib/validation';
-import { getReachableQuestionNodes, checkChoiceCoverage, CoverageResult, rangeToString } from '@/lib/graphUtils';
-import { FlowchartDefinition, FlowchartNode, NodeShape, EdgeStyle, QuestionCategory, ChoiceOption, STATE_NODE_PREFIX, CompoundCondition, EdgeCondition } from '@/types/flowchart';
+import { getReachableQuestionNodes } from '@/lib/graphUtils';
+import { generateStateNodeId, generateStateNodeLabel } from '@/lib/compoundConditionUtils';
+import { useFlowchartState } from '@/hooks/useFlowchartState';
+import { useDialogState } from '@/hooks/useDialogState';
+import {
+  FlowchartDefinition,
+  CustomNode,
+  CustomEdge,
+  isStateNode,
+} from '@/types/flowchart';
 
-// 利用可能なノード形状
-const nodeShapes: { value: NodeShape; label: string }[] = [
-  { value: 'rectangle', label: '四角形 [text]' },
-  { value: 'round', label: '角丸 (text)' },
-  { value: 'stadium', label: 'スタジアム ([text])' },
-  { value: 'subroutine', label: 'サブルーチン [[text]]' },
-  { value: 'database', label: 'データベース [(text)]' },
-  { value: 'circle', label: '円 ((text))' },
-  { value: 'doubleCircle', label: '二重円 (((text)))' },
-  { value: 'rhombus', label: 'ひし形 {text}' },
-  { value: 'hexagon', label: '六角形 {{text}}' },
-  { value: 'parallelogram', label: '平行四辺形 [/text/]' },
-  { value: 'trapezoid', label: '台形 [/text\\]' },
+// 初期ノードデータ
+const initialNodes: CustomNode[] = [
+  {
+    id: "A",
+    label: "Node A",
+    shape: "rectangle",
+    questionCategory: "MA",
+    choices: [
+      { id: "A_opt1", label: "選択肢1" },
+      { id: "A_opt2", label: "選択肢2" },
+      { id: "A_opt3", label: "選択肢3" },
+    ],
+  },
+  {
+    id: "B",
+    label: "Node B",
+    shape: "rectangle",
+    questionCategory: "SA",
+    choices: [
+      { id: "B_opt1", label: "YES" },
+      { id: "B_opt2", label: "NO" },
+    ],
+  },
+  { id: "C", label: "Node C", shape: "rectangle" },
+  {
+    id: "_state_A_A_opt1_A_opt2_B_B_opt1",
+    label: "Node A: 選択肢1, 選択肢2 AND Node B: YES",
+    shape: "hexagon",
+    compoundCondition: {
+      conditions: [
+        { nodeId: "A", conditionType: "choice", choiceCondition: { choiceIds: ["A_opt1", "A_opt2"] } },
+        { nodeId: "B", conditionType: "choice", choiceCondition: { choiceIds: ["B_opt1"] } },
+      ],
+      operator: "AND",
+    },
+  },
+  { id: "E", label: "Node E", shape: "rectangle" },
+  {
+    id: "_state_A_A_opt3_B_B_opt1",
+    label: "Node A: 選択肢3 AND Node B: YES",
+    shape: "hexagon",
+    compoundCondition: {
+      conditions: [
+        { nodeId: "A", conditionType: "choice", choiceCondition: { choiceIds: ["A_opt3"] } },
+        { nodeId: "B", conditionType: "choice", choiceCondition: { choiceIds: ["B_opt1"] } },
+      ],
+      operator: "AND",
+    },
+  },
+  { id: "G", label: "Node G", shape: "rectangle" },
 ];
 
-// 利用可能なエッジスタイル
-const edgeStyles: { value: EdgeStyle; label: string }[] = [
-  { value: 'solid', label: '実線矢印 -->' },
-  { value: 'dotted', label: '点線矢印 -.->' },
-  { value: 'thick', label: '太線矢印 ==>' },
-  { value: 'solidNoArrow', label: '実線 ---' },
-  { value: 'biDirectional', label: '双方向 <-->' },
-  { value: 'circleEnd', label: '丸終端 --o' },
-  { value: 'crossEnd', label: 'X終端 --x' },
+// 初期エッジデータ
+const initialEdges: CustomEdge[] = [
+  { from: "A", to: "B", label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
+  { from: "B", to: "_state_A_A_opt1_A_opt2_B_B_opt1", label: "Node A: 選択肢1, 選択肢2 AND Node B: YES", style: "dotted" },
+  { from: "_state_A_A_opt1_A_opt2_B_B_opt1", to: "C", label: "", style: "solid" },
+  { from: "B", to: "_state_A_A_opt3_B_B_opt1", label: "Node A: 選択肢3 AND Node B: YES", style: "dotted" },
+  { from: "_state_A_A_opt3_B_B_opt1", to: "E", label: "", style: "solid" },
+  { from: "B", to: "G", label: "NO", style: "solid" },
 ];
-
-// 設問カテゴリ
-const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
-  { value: '', label: '設問なし', description: '通常のノード' },
-  { value: 'SA', label: 'SA（単一選択）', description: '選択肢から1つ選択' },
-  { value: 'MA', label: 'MA（複数選択）', description: '選択肢から複数選択' },
-  { value: 'FA', label: 'FA（自由入力）', description: 'テキスト入力（分岐不可）' },
-  { value: 'NA', label: 'NA（数値入力）', description: '数値入力（条件分岐可能）' },
-];
-
-// カスタムノードの型定義
-interface CustomNode {
-  id: string;
-  label: string;
-  shape: NodeShape;
-  questionCategory?: QuestionCategory;
-  choices?: ChoiceOption[];
-  /** 状態ノードの場合、対応する複合条件 */
-  compoundCondition?: CompoundCondition;
-}
-
-/**
- * 状態ノードかどうかを判定
- */
-const isStateNode = (nodeId: string): boolean => {
-  return nodeId.startsWith(STATE_NODE_PREFIX);
-};
-
-/**
- * 複合条件から状態ノードのIDを生成
- */
-const generateStateNodeId = (conditions: CompoundCondition['conditions']): string => {
-  const parts = conditions.map(c => {
-    if (c.conditionType === 'choice' && c.choiceCondition) {
-      return `${c.nodeId}_${c.choiceCondition.choiceIds.join('_')}`;
-    }
-    if (c.conditionType === 'numeric' && c.numericCondition) {
-      return `${c.nodeId}_${c.numericCondition.operator}${c.numericCondition.value}`;
-    }
-    return c.nodeId;
-  });
-  return `${STATE_NODE_PREFIX}${parts.join('_')}`;
-};
-
-/**
- * 複合条件からラベルを生成
- */
-const generateStateNodeLabel = (conditions: CompoundCondition['conditions'], nodes: CustomNode[]): string => {
-  const parts = conditions.map(c => {
-    const node = nodes.find(n => n.id === c.nodeId);
-    const nodeName = node?.label || c.nodeId;
-
-    if (c.conditionType === 'choice' && c.choiceCondition) {
-      const choiceLabels = c.choiceCondition.choiceIds.map(choiceId => {
-        const choice = node?.choices?.find(ch => ch.id === choiceId);
-        return choice?.label || choiceId;
-      });
-      return `${nodeName}: ${choiceLabels.join(', ')}`;
-    }
-    if (c.conditionType === 'numeric' && c.numericCondition) {
-      const opSymbol = { eq: '=', gt: '>', lt: '<', gte: '>=', lte: '<=' }[c.numericCondition.operator];
-      return `${nodeName} ${opSymbol} ${c.numericCondition.value}`;
-    }
-    return nodeName;
-  });
-  return parts.join(' AND ');
-};
 
 export default function Home() {
-  // カスタムエディター用の状態
-  const [customNodes, setCustomNodes] = useState<CustomNode[]>([
-    {
-      "id": "A",
-      "label": "Node A",
-      "shape": "rectangle",
-      "questionCategory": "MA",
-      "choices": [
-        {
-          "id": "A_opt1",
-          "label": "選択肢1"
-        },
-        {
-          "id": "A_opt2",
-          "label": "選択肢2"
-        },
-        {
-          "id": "A_opt3",
-          "label": "選択肢3"
-        }
-      ]
-    },
-    {
-      "id": "B",
-      "label": "Node B",
-      "shape": "rectangle",
-      "questionCategory": "SA",
-      "choices": [
-        {
-          "id": "B_opt1",
-          "label": "YES"
-        },
-        {
-          "id": "B_opt2",
-          "label": "NO"
-        }
-      ]
-    },
-    {
-      "id": "C",
-      "label": "Node C",
-      "shape": "rectangle"
-    },
-    {
-      "id": "_state_A_A_opt1_A_opt2_B_B_opt1",
-      "label": "Node A: 選択肢1, 選択肢2 AND Node B: YES",
-      "shape": "hexagon",
-      "compoundCondition": {
-        "conditions": [
-          {
-            "nodeId": "A",
-            "conditionType": "choice",
-            "choiceCondition": {
-              "choiceIds": [
-                "A_opt1",
-                "A_opt2"
-              ]
-            }
-          },
-          {
-            "nodeId": "B",
-            "conditionType": "choice",
-            "choiceCondition": {
-              "choiceIds": [
-                "B_opt1"
-              ]
-            }
-          }
-        ],
-        "operator": "AND"
-      }
-    },
-    {
-      "id": "E",
-      "label": "Node E",
-      "shape": "rectangle"
-    },
-    {
-      "id": "_state_A_A_opt3_B_B_opt1",
-      "label": "Node A: 選択肢3 AND Node B: YES",
-      "shape": "hexagon",
-      "compoundCondition": {
-        "conditions": [
-          {
-            "nodeId": "A",
-            "conditionType": "choice",
-            "choiceCondition": {
-              "choiceIds": [
-                "A_opt3"
-              ]
-            }
-          },
-          {
-            "nodeId": "B",
-            "conditionType": "choice",
-            "choiceCondition": {
-              "choiceIds": [
-                "B_opt1"
-              ]
-            }
-          }
-        ],
-        "operator": "AND"
-      }
-    },
-    {
-      "id": "G",
-      "label": "Node G",
-      "shape": "rectangle"
-    }
-  ]);
+  // フローチャート状態管理
+  const flowchartState = useFlowchartState(initialNodes, initialEdges);
+  const {
+    nodes: customNodes,
+    edges: customEdges,
+    setNodes: setCustomNodes,
+    setEdges: setCustomEdges,
+    editingChoicesIndex,
+    displayNodes,
+    displayEdges,
+    coverageResults,
+    coverageMap,
+    addNode: handleAddNode,
+    updateNode: handleUpdateNodeDirect,
+    removeNode: handleRemoveNode,
+    updateNodeId: handleUpdateNodeId,
+    toggleChoicesEdit: handleToggleChoicesEdit,
+    addChoice: handleAddChoice,
+    removeChoice: handleRemoveChoice,
+    updateChoice: handleUpdateChoice,
+    addEdge: handleAddEdge,
+    updateEdge: handleUpdateEdgeDirect,
+    removeEdge: handleRemoveEdge,
+  } = flowchartState;
 
-  // 選択肢編集中のノードインデックス
-  const [editingChoicesIndex, setEditingChoicesIndex] = useState<number | null>(null);
-  const [customEdges, setCustomEdges] = useState<Array<{ from: string; to: string; label: string; style: EdgeStyle; condition?: EdgeCondition }>>([
-    {
-      "from": "A",
-      "to": "B",
-      "label": "選択肢1, 選択肢2, 選択肢3",
-      "style": "solid"
-    },
-    {
-      "from": "B",
-      "to": "_state_A_A_opt1_A_opt2_B_B_opt1",
-      "label": "Node A: 選択肢1, 選択肢2 AND Node B: YES",
-      "style": "dotted"
-    },
-    {
-      "from": "_state_A_A_opt1_A_opt2_B_B_opt1",
-      "to": "C",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "B",
-      "to": "_state_A_A_opt3_B_B_opt1",
-      "label": "Node A: 選択肢3 AND Node B: YES",
-      "style": "dotted"
-    },
-    {
-      "from": "_state_A_A_opt3_B_B_opt1",
-      "to": "E",
-      "label": "",
-      "style": "solid"
-    },
-    {
-      "from": "B",
-      "to": "G",
-      "label": "NO",
-      "style": "solid"
-    }
-  ]);
-
-  // ノード編集ダイアログ用の状態
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedSourceNode, setSelectedSourceNode] = useState<FlowchartNode | null>(null);
-
-  // エッジ編集ダイアログ用の状態
-  const [isEdgeDialogOpen, setIsEdgeDialogOpen] = useState(false);
-  const [selectedEdgeIndex, setSelectedEdgeIndex] = useState<number | null>(null);
-
-  // サイドパネル表示用（状態ノードを除外）
-  const displayNodes = useMemo(() => {
-    return customNodes.filter(node => !isStateNode(node.id));
-  }, [customNodes]);
-
-  // サイドパネル表示用エッジ（状態ノード関連を除外）
-  const displayEdges = useMemo(() => {
-    return customEdges.filter(edge => !isStateNode(edge.from) && !isStateNode(edge.to));
-  }, [customEdges]);
-
-  // 選択したノードに到達可能な設問ノード（経路解析用）
-  const [reachableConditionNodes, setReachableConditionNodes] = useState<CustomNode[]>([]);
-
-  // 選択肢の網羅性チェック結果
-  const coverageResults = useMemo(() => {
-    return checkChoiceCoverage(customNodes, customEdges);
-  }, [customNodes, customEdges]);
-
-  // ノードIDから網羅性チェック結果を取得するマップ
-  const coverageMap = useMemo(() => {
-    const map = new Map<string, CoverageResult>();
-    for (const result of coverageResults) {
-      map.set(result.nodeId, result);
-    }
-    return map;
-  }, [coverageResults]);
+  // ダイアログ状態管理
+  const dialogState = useDialogState(customNodes, customEdges);
+  const {
+    isNodeDialogOpen,
+    selectedSourceNode,
+    reachableConditionNodes,
+    openNodeDialog,
+    closeNodeDialog,
+    isEdgeDialogOpen,
+    selectedEdgeIndex,
+    selectedEdge,
+    selectedEdgeSourceNode,
+    selectedEdgeStateNode,
+    selectedEdgeConditionNodes,
+    openEdgeDialog,
+    closeEdgeDialog,
+    setSelectedEdgeIndex,
+  } = dialogState;
 
   // フローチャート定義
   const currentDefinition = useMemo((): FlowchartDefinition => {
@@ -310,44 +143,28 @@ export default function Home() {
     return FlowchartGenerator.generate(currentDefinition);
   }, [currentDefinition]);
 
+  // ========== イベントハンドラ ==========
+
   // ノードクリック時のハンドラ
   const handleNodeClick = useCallback((nodeId: string) => {
-    // 状態ノードはクリックしてもダイアログを表示しない
-    if (isStateNode(nodeId)) {
-      return;
-    }
+    if (isStateNode(nodeId)) return;
 
-    // クリックされたノードを探す
     let node = currentDefinition.nodes.find(n => n.id === nodeId);
     if (!node) {
-      // ラベルで検索（フォールバック）
       node = currentDefinition.nodes.find(n => n.label === nodeId);
     }
-
-    // ラベルで見つかった場合も状態ノードかチェック
-    if (node && isStateNode(node.id)) {
-      return;
-    }
+    if (node && isStateNode(node.id)) return;
 
     if (node) {
-      // 経路解析: このノードに到達するまでの経路上にある設問ノードを取得
-      const reachableNodes = getReachableQuestionNodes(
-        node.id,
-        customNodes,
-        customEdges
-      );
-
-      setSelectedSourceNode(node);
-      setReachableConditionNodes(reachableNodes);
-      setIsDialogOpen(true);
+      const reachableNodes = getReachableQuestionNodes(node.id, customNodes, customEdges);
+      openNodeDialog(node, reachableNodes);
     }
-  }, [currentDefinition.nodes, customNodes, customEdges]);
+  }, [currentDefinition.nodes, customNodes, customEdges, openNodeDialog]);
 
   // 条件追加のハンドラ
   const handleAddCondition = useCallback((result: AddConditionResult) => {
     if (!selectedSourceNode) return;
 
-    // 新規ノードの作成
     if (result.createNewNode) {
       setCustomNodes(prev => [...prev, {
         id: result.createNewNode!.id,
@@ -356,16 +173,12 @@ export default function Home() {
       }]);
     }
 
-    // 複合条件の場合
     if (result.compoundCondition && result.compoundCondition.conditions.length > 0) {
       const stateNodeId = generateStateNodeId(result.compoundCondition.conditions);
       const stateNodeLabel = generateStateNodeLabel(result.compoundCondition.conditions, customNodes);
-
-      // 既存の状態ノードがあるか確認
       const existingStateNode = customNodes.find(n => n.id === stateNodeId);
 
       if (!existingStateNode) {
-        // 状態ノードを作成
         setCustomNodes(prev => [...prev, {
           id: stateNodeId,
           label: stateNodeLabel,
@@ -374,7 +187,6 @@ export default function Home() {
         }]);
       }
 
-      // 複合条件のラベルを生成（すべての条件を含む）
       const compoundLabel = result.compoundCondition.conditions.map(cond => {
         if (cond.conditionType === 'choice' && cond.choiceCondition) {
           const node = customNodes.find(n => n.id === cond.nodeId);
@@ -391,27 +203,13 @@ export default function Home() {
         return '';
       }).filter(s => s).join(' AND ');
 
-      // 選択したノード（最後の設問ノード）から状態ノードへのエッジのみ作成
-      const newEdges: Array<{ from: string; to: string; label: string; style: EdgeStyle }> = [
-        // 選択したノードから状態ノードへ（1本のエッジのみ）
-        {
-          from: selectedSourceNode.id,
-          to: stateNodeId,
-          label: compoundLabel,
-          style: 'dotted',
-        },
-        // 状態ノードから接続先へ
-        {
-          from: stateNodeId,
-          to: result.targetNodeId,
-          label: result.label,
-          style: result.style,
-        },
+      const newEdges: CustomEdge[] = [
+        { from: selectedSourceNode.id, to: stateNodeId, label: compoundLabel, style: 'dotted' },
+        { from: stateNodeId, to: result.targetNodeId, label: result.label, style: result.style },
       ];
 
       setCustomEdges(prev => [...prev, ...newEdges]);
     } else {
-      // 単一条件の場合（従来の動作）
       setCustomEdges(prev => [...prev, {
         from: selectedSourceNode.id,
         to: result.targetNodeId,
@@ -421,20 +219,14 @@ export default function Home() {
       }]);
     }
 
-    setIsDialogOpen(false);
-    setSelectedSourceNode(null);
-  }, [selectedSourceNode, customNodes, customEdges]);
+    closeNodeDialog();
+  }, [selectedSourceNode, customNodes, setCustomNodes, setCustomEdges, closeNodeDialog]);
 
-  // ノード更新のハンドラ
+  // ノード更新のハンドラ（ダイアログから）
   const handleUpdateNode = useCallback((nodeId: string, update: NodeUpdateResult) => {
     setCustomNodes(prev => prev.map(node => {
       if (node.id !== nodeId) return node;
-
-      const updatedNode: CustomNode = {
-        ...node,
-        label: update.label,
-      };
-
+      const updatedNode: CustomNode = { ...node, label: update.label };
       if (update.questionCategory) {
         updatedNode.questionCategory = update.questionCategory;
         if (update.choices) {
@@ -444,26 +236,20 @@ export default function Home() {
         delete updatedNode.questionCategory;
         delete updatedNode.choices;
       }
-
       return updatedNode;
     }));
-  }, []);
+  }, [setCustomNodes]);
 
   // ノード削除のハンドラ（連鎖削除）
   const handleDeleteNode = useCallback((nodeId: string) => {
-    // 状態ノードは直接削除不可（UIで非表示のため通常は呼ばれないが念のため）
-    if (isStateNode(nodeId)) {
-      return;
-    }
+    if (isStateNode(nodeId)) return;
 
-    // 1. 削除するノードを参照している状態ノードを特定
     const relatedStateNodes = customNodes.filter(node =>
       isStateNode(node.id) &&
       node.compoundCondition?.conditions.some(c => c.nodeId === nodeId)
     );
     const stateNodeIds = relatedStateNodes.map(n => n.id);
 
-    // 2. 関連するエッジを削除（ノード自身 + 状態ノード）
     const newEdges = customEdges.filter(edge =>
       edge.from !== nodeId &&
       edge.to !== nodeId &&
@@ -471,108 +257,47 @@ export default function Home() {
       !stateNodeIds.includes(edge.to)
     );
 
-    // 3. ノードを削除（対象ノード + 関連状態ノード）
     const newNodes = customNodes.filter(node =>
       node.id !== nodeId && !stateNodeIds.includes(node.id)
     );
 
     setCustomNodes(newNodes);
     setCustomEdges(newEdges);
-  }, [customNodes, customEdges]);
-
-  // ノード追加
-  const addNode = () => {
-    const newId = String.fromCharCode(65 + customNodes.length); // A, B, C...
-    setCustomNodes([...customNodes, { id: newId, label: `Node ${newId}`, shape: 'rectangle' }]);
-  };
-
-  // 選択肢追加
-  const addChoice = (nodeIndex: number) => {
-    const newNodes = [...customNodes];
-    const node = newNodes[nodeIndex];
-    const choices = node.choices || [];
-    const newChoiceId = `${node.id}_opt${choices.length + 1}`;
-    newNodes[nodeIndex].choices = [...choices, { id: newChoiceId, label: `選択肢${choices.length + 1}` }];
-    setCustomNodes(newNodes);
-  };
-
-  // 選択肢削除
-  const removeChoice = (nodeIndex: number, choiceIndex: number) => {
-    const newNodes = [...customNodes];
-    newNodes[nodeIndex].choices = newNodes[nodeIndex].choices?.filter((_, i) => i !== choiceIndex);
-    setCustomNodes(newNodes);
-  };
-
-  // 選択肢更新
-  const updateChoice = (nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => {
-    const newNodes = [...customNodes];
-    if (newNodes[nodeIndex].choices) {
-      newNodes[nodeIndex].choices![choiceIndex][field] = value;
-      setCustomNodes(newNodes);
-    }
-  };
-
-  // ノード削除
-  const removeNode = (index: number) => {
-    const nodeId = customNodes[index].id;
-    setCustomNodes(customNodes.filter((_, i) => i !== index));
-    setCustomEdges(customEdges.filter(e => e.from !== nodeId && e.to !== nodeId));
-  };
-
-  // エッジ追加
-  const addEdge = () => {
-    if (customNodes.length >= 2) {
-      setCustomEdges([...customEdges, { from: customNodes[0].id, to: customNodes[1].id, label: '', style: 'solid' }]);
-    }
-  };
+  }, [customNodes, customEdges, setCustomNodes, setCustomEdges]);
 
   // エッジクリック時のハンドラ
   const handleEdgeClick = useCallback((edgeInfo: EdgeClickInfo) => {
     let edgeIndex: number | null = null;
 
-    // 1. ラベルでマッチングを試みる（最も信頼性が高い）
     if (edgeInfo.label) {
       const foundIndex = customEdges.findIndex(e => e.label === edgeInfo.label);
-      if (foundIndex !== -1) {
-        edgeIndex = foundIndex;
-      }
+      if (foundIndex !== -1) edgeIndex = foundIndex;
     }
 
-    // 2. from/to情報でマッチング
     if (edgeIndex === null && edgeInfo.fromNodeId && edgeInfo.toNodeId) {
       const foundIndex = customEdges.findIndex(
         e => e.from === edgeInfo.fromNodeId && e.to === edgeInfo.toNodeId
       );
-      if (foundIndex !== -1) {
-        edgeIndex = foundIndex;
-      }
+      if (foundIndex !== -1) edgeIndex = foundIndex;
     }
 
-    // 3. インデックスをフォールバックとして使用（範囲内の場合のみ）
     if (edgeIndex === null && edgeInfo.edgeIndex >= 0 && edgeInfo.edgeIndex < customEdges.length) {
       edgeIndex = edgeInfo.edgeIndex;
     }
 
     if (edgeIndex !== null) {
-      setSelectedEdgeIndex(edgeIndex);
-      setIsEdgeDialogOpen(true);
+      openEdgeDialog(edgeIndex);
     }
-  }, [customEdges]);
+  }, [customEdges, openEdgeDialog]);
 
-  // エッジ更新のハンドラ
+  // エッジ更新のハンドラ（ダイアログから）
   const handleUpdateEdge = useCallback((update: EdgeUpdateResult) => {
     if (selectedEdgeIndex === null) return;
-
     setCustomEdges(prev => prev.map((edge, index) => {
       if (index !== selectedEdgeIndex) return edge;
-      return {
-        ...edge,
-        label: update.label,
-        style: update.style,
-        condition: update.condition,
-      };
+      return { ...edge, label: update.label, style: update.style, condition: update.condition };
     }));
-  }, [selectedEdgeIndex]);
+  }, [selectedEdgeIndex, setCustomEdges]);
 
   // エッジ削除のハンドラ（ダイアログから）
   const handleDeleteEdge = useCallback(() => {
@@ -580,89 +305,25 @@ export default function Home() {
 
     const edgeToDelete = customEdges[selectedEdgeIndex];
 
-    // 状態ノードへのエッジを削除する場合、状態ノードと関連エッジも削除
     if (edgeToDelete && isStateNode(edgeToDelete.to)) {
       const stateNodeId = edgeToDelete.to;
-
-      // 状態ノードを削除
       setCustomNodes(prev => prev.filter(n => n.id !== stateNodeId));
-
-      // 状態ノードに関連するエッジをすべて削除
       setCustomEdges(prev => prev.filter(e => e.from !== stateNodeId && e.to !== stateNodeId));
     } else {
-      // 通常のエッジ削除
       setCustomEdges(prev => prev.filter((_, index) => index !== selectedEdgeIndex));
     }
 
     setSelectedEdgeIndex(null);
-  }, [selectedEdgeIndex, customEdges]);
-
-  // 選択中のエッジ情報を取得
-  const selectedEdge = useMemo((): EdgeInfo | null => {
-    if (selectedEdgeIndex === null) return null;
-    const edge = customEdges[selectedEdgeIndex];
-    if (!edge) return null;
-    return {
-      from: edge.from,
-      to: edge.to,
-      label: edge.label,
-      style: edge.style,
-      condition: edge.condition,
-    };
-  }, [selectedEdgeIndex, customEdges]);
-
-  // 選択中のエッジのソースノード情報を取得
-  const selectedEdgeSourceNode = useMemo((): SourceNodeInfo | undefined => {
-    if (!selectedEdge) return undefined;
-    const node = customNodes.find(n => n.id === selectedEdge.from);
-    if (!node) return undefined;
-    return {
-      id: node.id,
-      label: node.label,
-      questionCategory: node.questionCategory,
-      choices: node.choices,
-    };
-  }, [selectedEdge, customNodes]);
-
-  // 選択中のエッジが状態ノードへのエッジかどうか、状態ノード情報を取得
-  const selectedEdgeStateNode = useMemo((): StateNodeInfo | undefined => {
-    if (!selectedEdge) return undefined;
-    // エッジの接続先が状態ノードかチェック
-    if (!isStateNode(selectedEdge.to)) return undefined;
-    const stateNode = customNodes.find(n => n.id === selectedEdge.to);
-    if (!stateNode?.compoundCondition) return undefined;
-    return {
-      id: stateNode.id,
-      label: stateNode.label,
-      compoundCondition: stateNode.compoundCondition,
-    };
-  }, [selectedEdge, customNodes]);
-
-  // 複合条件に関連するノード情報を取得
-  const selectedEdgeConditionNodes = useMemo((): SourceNodeInfo[] => {
-    if (!selectedEdgeStateNode?.compoundCondition) return [];
-    const conditionNodeIds = selectedEdgeStateNode.compoundCondition.conditions.map(c => c.nodeId);
-    return customNodes
-      .filter(n => conditionNodeIds.includes(n.id))
-      .map(n => ({
-        id: n.id,
-        label: n.label,
-        questionCategory: n.questionCategory,
-        choices: n.choices,
-      }));
-  }, [selectedEdgeStateNode, customNodes]);
+  }, [selectedEdgeIndex, customEdges, setCustomNodes, setCustomEdges, setSelectedEdgeIndex]);
 
   // 複合条件更新のハンドラ
   const handleUpdateCompoundCondition = useCallback((update: CompoundConditionUpdateResult) => {
     if (selectedEdgeIndex === null || !selectedEdgeStateNode) return;
 
     const oldStateNodeId = selectedEdgeStateNode.id;
-
-    // 新しい状態ノードIDを生成
     const newStateNodeId = generateStateNodeId(update.compoundCondition.conditions);
     const newStateNodeLabel = generateStateNodeLabel(update.compoundCondition.conditions, customNodes);
 
-    // 状態ノードの更新
     setCustomNodes(prev => prev.map(node => {
       if (node.id !== oldStateNodeId) return node;
       return {
@@ -673,33 +334,20 @@ export default function Home() {
       };
     }));
 
-    // 関連するエッジのIDを更新
     setCustomEdges(prev => prev.map(edge => {
-      // 状態ノードへのエッジ（複合条件エッジ）
       if (edge.to === oldStateNodeId) {
-        return {
-          ...edge,
-          to: newStateNodeId,
-          label: update.label,
-        };
+        return { ...edge, to: newStateNodeId, label: update.label };
       }
-      // 状態ノードからのエッジ
       if (edge.from === oldStateNodeId) {
-        return {
-          ...edge,
-          from: newStateNodeId,
-        };
+        return { ...edge, from: newStateNodeId };
       }
       return edge;
     }));
 
     setSelectedEdgeIndex(null);
-  }, [selectedEdgeIndex, selectedEdgeStateNode, customNodes]);
+  }, [selectedEdgeIndex, selectedEdgeStateNode, customNodes, setCustomNodes, setCustomEdges, setSelectedEdgeIndex]);
 
-  // エッジ削除
-  const removeEdge = (index: number) => {
-    setCustomEdges(customEdges.filter((_, i) => i !== index));
-  };
+  // ========== レンダリング ==========
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -714,339 +362,28 @@ export default function Home() {
       </header>
 
       <div className="flex h-[calc(100vh-80px)]">
-        {/* 左パネル: コントロール */}
-        <div className="w-1/3 p-4 overflow-y-auto border-r border-gray-200 bg-white">
-          {/* 操作説明 */}
-          <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800">
-              <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードから新しい接続を追加できます。
-            </p>
-          </div>
-
-          {/* ノードエディター */}
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-gray-900">ノード</h3>
-                <button
-                  onClick={addNode}
-                  className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                >
-                  + 追加
-                </button>
-              </div>
-              <div className="space-y-3">
-                {displayNodes.map((node) => {
-                  const index = customNodes.findIndex(n => n.id === node.id);
-                  const idValidation = validateNodeId(node.id);
-                  const coverage = coverageMap.get(node.id);
-                  const hasWarning = coverage && !coverage.isCovered;
-                  return (
-                  <div key={node.id} className={`p-3 rounded-lg border ${
-                    hasWarning ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    {/* 基本情報行 */}
-                    <div className="flex gap-2 items-center">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={node.id}
-                          onChange={e => {
-                            const newNodes = [...customNodes];
-                            const oldId = newNodes[index].id;
-                            newNodes[index].id = e.target.value;
-                            setCustomNodes(newNodes);
-                            // エッジのIDも更新
-                            setCustomEdges(customEdges.map(edge => ({
-                              ...edge,
-                              from: edge.from === oldId ? e.target.value : edge.from,
-                              to: edge.to === oldId ? e.target.value : edge.to,
-                            })));
-                          }}
-                          className={`w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900 ${
-                            !idValidation.valid ? 'border-red-500 bg-red-50' : ''
-                          }`}
-                          placeholder="ID"
-                          title={idValidation.message || 'ノードID'}
-                        />
-                        {!idValidation.valid && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center" title={idValidation.message}>!</span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        value={node.label}
-                        onChange={e => {
-                          const newNodes = [...customNodes];
-                          newNodes[index].label = e.target.value;
-                          setCustomNodes(newNodes);
-                        }}
-                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                        placeholder="ラベル"
-                      />
-                      <select
-                        value={node.shape}
-                        onChange={e => {
-                          const newNodes = [...customNodes];
-                          newNodes[index].shape = e.target.value as NodeShape;
-                          setCustomNodes(newNodes);
-                        }}
-                        className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                      >
-                        {nodeShapes.map(shape => (
-                          <option key={shape.value} value={shape.value}>
-                            {shape.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => removeNode(index)}
-                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                      >
-                        削除
-                      </button>
-                    </div>
-
-                    {/* 設問カテゴリ選択 */}
-                    <div className="mt-2 flex gap-2 items-center">
-                      <span className="text-xs text-gray-600 min-w-16">設問タイプ:</span>
-                      <select
-                        value={node.questionCategory || ''}
-                        onChange={e => {
-                          const newNodes = [...customNodes];
-                          const category = e.target.value as QuestionCategory | '';
-                          if (category) {
-                            newNodes[index].questionCategory = category;
-                            // SA/MAの場合、選択肢がなければ初期化
-                            if ((category === 'SA' || category === 'MA') && !newNodes[index].choices) {
-                              newNodes[index].choices = [];
-                            }
-                          } else {
-                            delete newNodes[index].questionCategory;
-                            delete newNodes[index].choices;
-                          }
-                          setCustomNodes(newNodes);
-                        }}
-                        className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                      >
-                        {questionCategories.map(cat => (
-                          <option key={cat.value} value={cat.value}>
-                            {cat.label}
-                          </option>
-                        ))}
-                      </select>
-                      {/* SA/MAの場合、選択肢編集ボタン */}
-                      {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
-                        <button
-                          onClick={() => setEditingChoicesIndex(editingChoicesIndex === index ? null : index)}
-                          className={`px-2 py-1 text-xs rounded ${
-                            editingChoicesIndex === index
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          選択肢 ({node.choices?.length || 0})
-                        </button>
-                      )}
-                    </div>
-
-                    {/* カテゴリの説明 */}
-                    {node.questionCategory && (
-                      <div className="mt-1">
-                        <span className={`text-xs px-2 py-0.5 rounded ${
-                          node.questionCategory === 'FA' ? 'bg-gray-200 text-gray-600' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {questionCategories.find(c => c.value === node.questionCategory)?.description}
-                          {node.questionCategory === 'FA' && ' - 分岐設定不可'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 網羅性警告 */}
-                    {coverage && !coverage.isCovered && (
-                      <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-xs">
-                        <div className="flex items-center gap-1 text-amber-800 font-medium">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          {!coverage.hasOutgoingEdges
-                            ? '出力エッジがありません'
-                            : coverage.questionCategory === 'NA'
-                              ? '数値条件が全範囲をカバーしていません'
-                              : '未使用の選択肢があります'}
-                        </div>
-                        {coverage.unusedChoices.length > 0 && (
-                          <div className="mt-1 text-amber-700">
-                            未使用: {coverage.unusedChoices.map(c => c.label).join(', ')}
-                          </div>
-                        )}
-                        {coverage.numericGaps && coverage.numericGaps.length > 0 && (
-                          <div className="mt-1 text-amber-700">
-                            <span>未カバー範囲:</span>
-                            <ul className="list-disc list-inside ml-2">
-                              {coverage.numericGaps.map((gap, gapIndex) => (
-                                <li key={gapIndex}>{rangeToString(gap)}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 選択肢編集エリア（SA/MA） */}
-                    {editingChoicesIndex === index && (node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
-                      <div className="mt-3 p-2 bg-white rounded border border-blue-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-700">選択肢一覧</span>
-                          <button
-                            onClick={() => addChoice(index)}
-                            className="px-2 py-0.5 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                          >
-                            + 追加
-                          </button>
-                        </div>
-                        {node.choices && node.choices.length > 0 ? (
-                          <div className="space-y-1">
-                            {node.choices.map((choice, choiceIndex) => (
-                              <div key={choiceIndex} className="flex gap-1 items-center">
-                                <input
-                                  type="text"
-                                  value={choice.id}
-                                  onChange={e => updateChoice(index, choiceIndex, 'id', e.target.value)}
-                                  className="w-20 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
-                                  placeholder="ID"
-                                />
-                                <input
-                                  type="text"
-                                  value={choice.label}
-                                  onChange={e => updateChoice(index, choiceIndex, 'label', e.target.value)}
-                                  className="flex-1 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
-                                  placeholder="ラベル"
-                                />
-                                <button
-                                  onClick={() => removeChoice(index, choiceIndex)}
-                                  className="px-1 py-0.5 text-xs bg-red-400 text-white rounded hover:bg-red-500"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 text-center py-2">
-                            選択肢がありません。「+ 追加」で選択肢を追加してください。
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* エッジエディター */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-gray-900">エッジ（接続）</h3>
-                <button
-                  onClick={addEdge}
-                  className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                  disabled={customNodes.length < 2}
-                >
-                  + 追加
-                </button>
-              </div>
-              <div className="space-y-2">
-                {displayEdges.map((edge) => {
-                  const index = customEdges.findIndex(e => e.from === edge.from && e.to === edge.to && e.label === edge.label);
-                  return (
-                  <div key={`${edge.from}-${edge.to}-${index}`} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
-                    <select
-                      value={edge.from}
-                      onChange={e => {
-                        const newEdges = [...customEdges];
-                        newEdges[index].from = e.target.value;
-                        setCustomEdges(newEdges);
-                      }}
-                      className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                    >
-                      {displayNodes.map(node => (
-                        <option key={node.id} value={node.id}>
-                          {node.id}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={edge.style}
-                      onChange={e => {
-                        const newEdges = [...customEdges];
-                        newEdges[index].style = e.target.value as EdgeStyle;
-                        setCustomEdges(newEdges);
-                      }}
-                      className="px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                    >
-                      {edgeStyles.map(style => (
-                        <option key={style.value} value={style.value}>
-                          {style.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={edge.to}
-                      onChange={e => {
-                        const newEdges = [...customEdges];
-                        newEdges[index].to = e.target.value;
-                        setCustomEdges(newEdges);
-                      }}
-                      className="w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                    >
-                      {displayNodes.map(node => (
-                        <option key={node.id} value={node.id}>
-                          {node.id}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={edge.label}
-                      onChange={e => {
-                        const newEdges = [...customEdges];
-                        newEdges[index].label = e.target.value;
-                        setCustomEdges(newEdges);
-                      }}
-                      className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                      placeholder="ラベル（任意）"
-                    />
-                    <button
-                      onClick={() => removeEdge(index)}
-                      className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                      削除
-                    </button>
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Object定義表示 */}
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2 text-gray-900">FlowchartDefinition オブジェクト</h3>
-            <pre className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs overflow-x-auto max-h-60 overflow-y-auto">
-              {JSON.stringify(currentDefinition, null, 2)}
-            </pre>
-          </div>
-
-          {/* 生成されたMermaidコード */}
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2 text-gray-900">生成された Mermaid コード</h3>
-            <pre className="p-3 bg-gray-900 text-blue-300 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">
-              {mermaidCode}
-            </pre>
-          </div>
-        </div>
+        {/* 左パネル: サイドバー */}
+        <Sidebar
+          nodes={customNodes}
+          displayNodes={displayNodes}
+          coverageMap={coverageMap}
+          editingChoicesIndex={editingChoicesIndex}
+          onAddNode={handleAddNode}
+          onUpdateNode={handleUpdateNodeDirect}
+          onRemoveNode={handleRemoveNode}
+          onUpdateNodeId={handleUpdateNodeId}
+          onToggleChoicesEdit={handleToggleChoicesEdit}
+          onAddChoice={handleAddChoice}
+          onRemoveChoice={handleRemoveChoice}
+          onUpdateChoice={handleUpdateChoice}
+          edges={customEdges}
+          displayEdges={displayEdges}
+          onAddEdge={handleAddEdge}
+          onUpdateEdge={handleUpdateEdgeDirect}
+          onRemoveEdge={handleRemoveEdge}
+          currentDefinition={currentDefinition}
+          mermaidCode={mermaidCode}
+        />
 
         {/* 右パネル: プレビュー */}
         <div className="flex-1 p-4 bg-gray-50">
@@ -1064,12 +401,8 @@ export default function Home() {
 
       {/* ノード編集ダイアログ */}
       <NodeEditDialog
-        isOpen={isDialogOpen}
-        onClose={() => {
-          setIsDialogOpen(false);
-          setSelectedSourceNode(null);
-          setReachableConditionNodes([]);
-        }}
+        isOpen={isNodeDialogOpen}
+        onClose={closeNodeDialog}
         sourceNode={selectedSourceNode ? {
           ...selectedSourceNode,
           questionCategory: customNodes.find(n => n.id === selectedSourceNode.id)?.questionCategory,
@@ -1097,10 +430,7 @@ export default function Home() {
       {/* エッジ編集ダイアログ */}
       <EdgeEditDialog
         isOpen={isEdgeDialogOpen}
-        onClose={() => {
-          setIsEdgeDialogOpen(false);
-          setSelectedEdgeIndex(null);
-        }}
+        onClose={closeEdgeDialog}
         edge={selectedEdge}
         sourceNode={selectedEdgeSourceNode}
         stateNode={selectedEdgeStateNode}

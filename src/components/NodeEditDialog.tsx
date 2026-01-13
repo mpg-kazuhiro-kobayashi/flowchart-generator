@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
 import { validateNodeId } from '@/lib/validation';
-import { NumericRange, rangeToString } from '@/lib/graphUtils';
+import { NumericRange, rangeToString } from '@/lib/numericRangeUtils';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
