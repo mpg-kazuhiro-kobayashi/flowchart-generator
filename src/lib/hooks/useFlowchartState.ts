@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { CustomNode, CustomEdge, isSystemNode } from '@/types/flowchart';
+import { CustomNode, CustomEdge, isStateNode } from '@/types/flowchart';
 import { checkChoiceCoverage, CoverageResult } from '@/domain/coverage';
 
 /**
@@ -16,14 +16,14 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
 
   // ========== 派生データ ==========
 
-  // サイドパネル表示用（システムノードを除外）
+  // サイドパネル表示用（状態ノードを除外）
   const displayNodes = useMemo(() => {
-    return nodes.filter(node => !isSystemNode(node.id));
+    return nodes.filter(node => !isStateNode(node.id));
   }, [nodes]);
 
-  // サイドパネル表示用エッジ（システムノード関連を除外）
+  // サイドパネル表示用エッジ（状態ノード関連を除外）
   const displayEdges = useMemo(() => {
-    return edges.filter(edge => !isSystemNode(edge.from) && !isSystemNode(edge.to));
+    return edges.filter(edge => !isStateNode(edge.from) && !isStateNode(edge.to));
   }, [edges]);
 
   // 選択肢の網羅性チェック結果
