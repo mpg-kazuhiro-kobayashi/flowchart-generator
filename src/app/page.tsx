@@ -14,11 +14,16 @@ import {
   FlowchartDefinition,
   CustomNode,
   CustomEdge,
+  isSystemNode,
   isStateNode,
+  START_NODE_ID,
+  END_NODE_ID,
 } from '@/types/flowchart';
 
 // 初期ノードデータ
 const initialNodes: CustomNode[] = [
+  // 開始ノード（システムノード）
+  { id: START_NODE_ID, label: "開始", shape: "stadium" },
   {
     id: "A",
     label: "Node A",
@@ -67,16 +72,24 @@ const initialNodes: CustomNode[] = [
     },
   },
   { id: "G", label: "Node G", shape: "rectangle" },
+  // 終了ノード（システムノード）
+  { id: END_NODE_ID, label: "終了", shape: "stadium" },
 ];
 
 // 初期エッジデータ
 const initialEdges: CustomEdge[] = [
+  // 開始ノードから最初の設問へ
+  { from: START_NODE_ID, to: "A", label: "", style: "solid" },
   { from: "A", to: "B", label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
   { from: "B", to: "_state_A_A_opt1_A_opt2_B_B_opt1", label: "Node A: 選択肢1, 選択肢2 AND Node B: YES", style: "dotted" },
   { from: "_state_A_A_opt1_A_opt2_B_B_opt1", to: "C", label: "", style: "solid" },
   { from: "B", to: "_state_A_A_opt3_B_B_opt1", label: "Node A: 選択肢3 AND Node B: YES", style: "dotted" },
   { from: "_state_A_A_opt3_B_B_opt1", to: "E", label: "", style: "solid" },
   { from: "B", to: "G", label: "NO", style: "solid" },
+  // 各末端ノードから終了ノードへ
+  { from: "C", to: END_NODE_ID, label: "", style: "solid" },
+  { from: "E", to: END_NODE_ID, label: "", style: "solid" },
+  { from: "G", to: END_NODE_ID, label: "", style: "solid" },
 ];
 
 export default function Home() {
@@ -147,13 +160,14 @@ export default function Home() {
 
   // ノードクリック時のハンドラ
   const handleNodeClick = useCallback((nodeId: string) => {
-    if (isStateNode(nodeId)) return;
+    // システムノード（開始・終了・状態）はクリック不可
+    if (isSystemNode(nodeId)) return;
 
     let node = currentDefinition.nodes.find(n => n.id === nodeId);
     if (!node) {
       node = currentDefinition.nodes.find(n => n.label === nodeId);
     }
-    if (node && isStateNode(node.id)) return;
+    if (node && isSystemNode(node.id)) return;
 
     if (node) {
       const reachableNodes = getReachableQuestionNodes(node.id, customNodes, customEdges);

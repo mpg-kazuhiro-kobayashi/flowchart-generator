@@ -85,6 +85,12 @@ export interface CompoundCondition {
 /** 状態ノードのプレフィックス */
 export const STATE_NODE_PREFIX = '_state_';
 
+/** 開始ノードのID */
+export const START_NODE_ID = '_start_';
+
+/** 終了ノードのID */
+export const END_NODE_ID = '_end_';
+
 /** エッジ（矢印）のスタイル */
 export type EdgeStyle =
   | 'solid'          // --> 実線矢印
@@ -215,4 +221,26 @@ export interface CustomEdge {
  */
 export const isStateNode = (nodeId: string): boolean => {
   return nodeId.startsWith(STATE_NODE_PREFIX);
+};
+
+/**
+ * 開始ノードかどうかを判定
+ */
+export const isStartNode = (nodeId: string): boolean => {
+  return nodeId === START_NODE_ID;
+};
+
+/**
+ * 終了ノードかどうかを判定
+ */
+export const isEndNode = (nodeId: string): boolean => {
+  return nodeId === END_NODE_ID;
+};
+
+/**
+ * システムノード（開始・終了・状態）かどうかを判定
+ * ユーザーが編集・削除できないノード
+ */
+export const isSystemNode = (nodeId: string): boolean => {
+  return isStartNode(nodeId) || isEndNode(nodeId) || isStateNode(nodeId);
 };
