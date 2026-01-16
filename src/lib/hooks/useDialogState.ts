@@ -5,9 +5,8 @@ import {
   FlowchartNode,
   CustomNode,
   CustomEdge,
-  isStateNode,
 } from '@/types/flowchart';
-import { EdgeInfo, SourceNodeInfo, StateNodeInfo } from '@/components/EdgeEditDialog';
+import { EdgeInfo, SourceNodeInfo } from '@/components/EdgeEditDialog';
 
 /**
  * ダイアログ（ノード編集・エッジ編集）の状態管理フック
@@ -60,6 +59,7 @@ export function useDialogState(nodes: CustomNode[], edges: CustomEdge[]) {
       label: edge.label,
       style: edge.style,
       condition: edge.condition,
+      compoundCondition: edge.compoundCondition,
     };
   }, [selectedEdgeIndex, edges]);
 
@@ -75,21 +75,10 @@ export function useDialogState(nodes: CustomNode[], edges: CustomEdge[]) {
     };
   }, [selectedEdge, nodes]);
 
-  const selectedEdgeStateNode = useMemo((): StateNodeInfo | undefined => {
-    if (!selectedEdge) return undefined;
-    if (!isStateNode(selectedEdge.to)) return undefined;
-    const stateNode = nodes.find(n => n.id === selectedEdge.to);
-    if (!stateNode?.compoundCondition) return undefined;
-    return {
-      id: stateNode.id,
-      label: stateNode.label,
-      compoundCondition: stateNode.compoundCondition,
-    };
-  }, [selectedEdge, nodes]);
-
+  // 複合条件に関連するノード情報を取得
   const selectedEdgeConditionNodes = useMemo((): SourceNodeInfo[] => {
-    if (!selectedEdgeStateNode?.compoundCondition) return [];
-    const conditionNodeIds = selectedEdgeStateNode.compoundCondition.conditions.map(c => c.nodeId);
+    if (!selectedEdge?.compoundCondition) return [];
+    const conditionNodeIds = selectedEdge.compoundCondition.conditions.map(c => c.nodeId);
     return nodes
       .filter(n => conditionNodeIds.includes(n.id))
       .map(n => ({
@@ -98,7 +87,7 @@ export function useDialogState(nodes: CustomNode[], edges: CustomEdge[]) {
         questionCategory: n.questionCategory,
         choices: n.choices,
       }));
-  }, [selectedEdgeStateNode, nodes]);
+  }, [selectedEdge, nodes]);
 
   return {
     // Node dialog
@@ -112,7 +101,6 @@ export function useDialogState(nodes: CustomNode[], edges: CustomEdge[]) {
     selectedEdgeIndex,
     selectedEdge,
     selectedEdgeSourceNode,
-    selectedEdgeStateNode,
     selectedEdgeConditionNodes,
     openEdgeDialog,
     closeEdgeDialog,

@@ -2,7 +2,7 @@
  * 設問ノードの網羅性チェックに関するユーティリティ関数
  */
 
-import { QuestionCategory, ChoiceOption, SingleCondition, NumericOperator, isStateNode } from '@/types/flowchart';
+import { QuestionCategory, ChoiceOption, NumericOperator, CompoundCondition } from '@/types/flowchart';
 import { NumericRange, operatorToRange, findNumericGaps } from './numericRange';
 
 /**
@@ -12,9 +12,6 @@ interface GraphNode {
   id: string;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
-  compoundCondition?: {
-    conditions: SingleCondition[];
-  };
 }
 
 /**
@@ -30,6 +27,7 @@ interface GraphEdge {
       value: number;
     };
   };
+  compoundCondition?: CompoundCondition;
 }
 
 /**
@@ -71,9 +69,7 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
   // SA/MA/NAノードを抽出（FAは分岐不可のため除外）
   const questionNodes = nodes.filter(
-    node => node.questionCategory &&
-            node.questionCategory !== 'FA' &&
-            !isStateNode(node.id)
+    node => node.questionCategory && node.questionCategory !== 'FA'
   );
 
   for (const node of questionNodes) {
@@ -98,12 +94,11 @@ export function checkChoiceCoverage<T extends GraphNode>(
         }
       }
 
-      // 複合条件（状態ノード）で使用されている選択肢もチェック
-      const stateNodes = nodes.filter(n => isStateNode(n.id) && n.compoundCondition);
-      for (const stateNode of stateNodes) {
-        if (!stateNode.compoundCondition) continue;
+      // 複合条件を持つエッジから使用されている選択肢をチェック
+      for (const edge of edges) {
+        if (!edge.compoundCondition) continue;
 
-        for (const condition of stateNode.compoundCondition.conditions) {
+        for (const condition of edge.compoundCondition.conditions) {
           if (condition.nodeId === node.id && condition.choiceCondition) {
             for (const choiceId of condition.choiceCondition.choiceIds) {
               usedChoiceIds.add(choiceId);
@@ -137,12 +132,11 @@ export function checkChoiceCoverage<T extends GraphNode>(
         }
       }
 
-      // 2. 複合条件（状態ノード）から数値条件を収集
-      const stateNodes = nodes.filter(n => isStateNode(n.id) && n.compoundCondition);
-      for (const stateNode of stateNodes) {
-        if (!stateNode.compoundCondition) continue;
+      // 2. 複合条件を持つエッジから数値条件を収集
+      for (const edge of edges) {
+        if (!edge.compoundCondition) continue;
 
-        for (const condition of stateNode.compoundCondition.conditions) {
+        for (const condition of edge.compoundCondition.conditions) {
           if (condition.nodeId === node.id && condition.numericCondition) {
             const { operator, value } = condition.numericCondition;
             ranges.push(operatorToRange(operator, value));

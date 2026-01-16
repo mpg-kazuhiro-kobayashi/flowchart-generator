@@ -82,9 +82,6 @@ export interface CompoundCondition {
   operator: 'AND';
 }
 
-/** 状態ノードのプレフィックス */
-export const STATE_NODE_PREFIX = '_state_';
-
 /** エッジ（矢印）のスタイル */
 export type EdgeStyle =
   | 'solid'          // --> 実線矢印
@@ -197,8 +194,6 @@ export interface CustomNode {
   shape: NodeShape;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
-  /** 状態ノードの場合、対応する複合条件 */
-  compoundCondition?: CompoundCondition;
 }
 
 /** カスタムエッジ（エディタ用） */
@@ -207,12 +202,8 @@ export interface CustomEdge {
   to: string;
   label: string;
   style: EdgeStyle;
+  /** 単一条件（SA/MA/NA用） */
   condition?: EdgeCondition;
+  /** 複合条件（AND条件） */
+  compoundCondition?: CompoundCondition;
 }
-
-/**
- * 状態ノードかどうかを判定
- */
-export const isStateNode = (nodeId: string): boolean => {
-  return nodeId.startsWith(STATE_NODE_PREFIX);
-};

@@ -15,7 +15,6 @@ const questionCategories: { value: QuestionCategory | ''; label: string; descrip
 
 interface NodeListProps {
   nodes: CustomNode[];
-  displayNodes: CustomNode[];
   coverageMap: Map<string, CoverageResult>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
@@ -29,7 +28,6 @@ interface NodeListProps {
 
 export default function NodeList({
   nodes,
-  displayNodes,
   coverageMap,
   editingChoicesIndex,
   onAddNode,
@@ -52,8 +50,7 @@ export default function NodeList({
         </button>
       </div>
       <div className="space-y-3">
-        {displayNodes.map((node) => {
-          const index = nodes.findIndex(n => n.id === node.id);
+        {nodes.map((node, index) => {
           const coverage = coverageMap.get(node.id);
           const hasWarning = coverage && !coverage.isCovered;
           return (

@@ -8,7 +8,6 @@ import EdgeList from './EdgeList';
 interface SidebarProps {
   // ノード関連
   nodes: CustomNode[];
-  displayNodes: CustomNode[];
   coverageMap: Map<string, CoverageResult>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
@@ -20,7 +19,6 @@ interface SidebarProps {
   onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
   // エッジ関連
   edges: CustomEdge[];
-  displayEdges: CustomEdge[];
   onAddEdge: () => void;
   onUpdateEdge: (index: number, updates: Partial<CustomEdge>) => void;
   onRemoveEdge: (index: number) => void;
@@ -31,7 +29,6 @@ interface SidebarProps {
 
 export default function Sidebar({
   nodes,
-  displayNodes,
   coverageMap,
   editingChoicesIndex,
   onAddNode,
@@ -42,7 +39,6 @@ export default function Sidebar({
   onRemoveChoice,
   onUpdateChoice,
   edges,
-  displayEdges,
   onAddEdge,
   onUpdateEdge,
   onRemoveEdge,
@@ -62,7 +58,6 @@ export default function Sidebar({
       <div className="space-y-6">
         <NodeList
           nodes={nodes}
-          displayNodes={displayNodes}
           coverageMap={coverageMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={onAddNode}
@@ -77,12 +72,10 @@ export default function Sidebar({
         {/* エッジエディター */}
         <EdgeList
           edges={edges}
-          displayEdges={displayEdges}
-          displayNodes={displayNodes}
+          nodes={nodes}
           onAddEdge={onAddEdge}
           onUpdateEdge={onUpdateEdge}
           onRemoveEdge={onRemoveEdge}
-          nodesCount={nodes.length}
         />
       </div>
 

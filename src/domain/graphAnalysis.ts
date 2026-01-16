@@ -2,7 +2,7 @@
  * フローチャートのグラフ構造を解析するユーティリティ関数
  */
 
-import { QuestionCategory, ChoiceOption, SingleCondition, isStateNode } from '@/types/flowchart';
+import { QuestionCategory, ChoiceOption } from '@/types/flowchart';
 
 /**
  * ノードの型定義（最小限の情報）
@@ -11,9 +11,6 @@ interface GraphNode {
   id: string;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
-  compoundCondition?: {
-    conditions: SingleCondition[];
-  };
 }
 
 /**
@@ -60,26 +57,8 @@ export function getReachableQuestionNodes<T extends GraphNode>(
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
-    // 状態ノードの場合、その複合条件から元の設問ノードを取得
-    if (isStateNode(node.id) && node.compoundCondition) {
-      node.compoundCondition.conditions.forEach(cond => {
-        const originalNode = nodes.find(n => n.id === cond.nodeId);
-        if (
-          originalNode &&
-          originalNode.questionCategory &&
-          originalNode.questionCategory !== 'FA' &&
-          !isStateNode(originalNode.id)
-        ) {
-          questionNodeIds.add(originalNode.id);
-        }
-      });
-    }
-    // 設問ノード（SA/MA/NA）かつ状態ノードでない場合、収集
-    else if (
-      node.questionCategory &&
-      node.questionCategory !== 'FA' &&
-      !isStateNode(node.id)
-    ) {
+    // 設問ノード（SA/MA/NA）の場合、収集
+    if (node.questionCategory && node.questionCategory !== 'FA') {
       questionNodeIds.add(node.id);
     }
 

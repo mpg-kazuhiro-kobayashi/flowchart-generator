@@ -3,18 +3,17 @@
 import { useMemo, useCallback } from 'react';
 import FlowchartRenderer, { EdgeClickInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { AddConditionResult, NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
-import EdgeEditDialog, { EdgeUpdateResult, CompoundConditionUpdateResult } from '@/components/EdgeEditDialog';
+import EdgeEditDialog, { EdgeUpdateResult } from '@/components/EdgeEditDialog';
 import Sidebar from '@/components/Sidebar';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
-import { generateStateNodeId, generateStateNodeLabel, generateCompoundConditionEdgeLabel } from '@/domain/compoundCondition';
+import { generateCompoundConditionLabel } from '@/domain/compoundCondition';
 import { useFlowchartState } from '@/lib/hooks/useFlowchartState';
 import { useDialogState } from '@/lib/hooks/useDialogState';
 import {
   FlowchartDefinition,
   CustomNode,
   CustomEdge,
-  isStateNode,
 } from '@/types/flowchart';
 
 // 初期ノードID（固定値 - SSR/CSR で一貫性を保つため）
@@ -22,8 +21,8 @@ import {
 const NODE_ID_A = 'node_a1b2c3d4e5f6';
 const NODE_ID_B = 'node_b2c3d4e5f6g7';
 const NODE_ID_C = 'node_c3d4e5f6g7h8';
+const NODE_ID_D = 'node_d4e5f6g7h8i9';
 const NODE_ID_E = 'node_e5f6g7h8i9j0';
-const NODE_ID_G = 'node_g7h8i9j0k1l2';
 
 // 選択肢ID（固定値）
 const CHOICE_A_OPT1 = 'choice_a1opt1xxxxx';
@@ -32,11 +31,7 @@ const CHOICE_A_OPT3 = 'choice_a1opt3xxxxx';
 const CHOICE_B_OPT1 = 'choice_b1opt1xxxxx';
 const CHOICE_B_OPT2 = 'choice_b1opt2xxxxx';
 
-// 状態ノードID
-const STATE_NODE_1 = `_state_${NODE_ID_A}_${CHOICE_A_OPT1}_${CHOICE_A_OPT2}_${NODE_ID_B}_${CHOICE_B_OPT1}`;
-const STATE_NODE_2 = `_state_${NODE_ID_A}_${CHOICE_A_OPT3}_${NODE_ID_B}_${CHOICE_B_OPT1}`;
-
-// 初期ノードデータ
+// 初期ノードデータ（状態ノードなし）
 const initialNodes: CustomNode[] = [
   {
     id: NODE_ID_A,
@@ -60,10 +55,18 @@ const initialNodes: CustomNode[] = [
     ],
   },
   { id: NODE_ID_C, label: "Node C", shape: "rectangle" },
+  { id: NODE_ID_D, label: "Node D", shape: "rectangle" },
+  { id: NODE_ID_E, label: "Node E", shape: "rectangle" },
+];
+
+// 初期エッジデータ（compoundCondition をエッジに直接設定）
+const initialEdges: CustomEdge[] = [
+  { from: NODE_ID_A, to: NODE_ID_B, label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
   {
-    id: STATE_NODE_1,
+    from: NODE_ID_B,
+    to: NODE_ID_C,
     label: "Node A: 選択肢1, 選択肢2 AND Node B: YES",
-    shape: "hexagon",
+    style: "solid",
     compoundCondition: {
       conditions: [
         { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT1, CHOICE_A_OPT2] } },
@@ -72,11 +75,11 @@ const initialNodes: CustomNode[] = [
       operator: "AND",
     },
   },
-  { id: NODE_ID_E, label: "Node E", shape: "rectangle" },
   {
-    id: STATE_NODE_2,
+    from: NODE_ID_B,
+    to: NODE_ID_D,
     label: "Node A: 選択肢3 AND Node B: YES",
-    shape: "hexagon",
+    style: "solid",
     compoundCondition: {
       conditions: [
         { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT3] } },
@@ -85,17 +88,7 @@ const initialNodes: CustomNode[] = [
       operator: "AND",
     },
   },
-  { id: NODE_ID_G, label: "Node G", shape: "rectangle" },
-];
-
-// 初期エッジデータ
-const initialEdges: CustomEdge[] = [
-  { from: NODE_ID_A, to: NODE_ID_B, label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
-  { from: NODE_ID_B, to: STATE_NODE_1, label: "Node A: 選択肢1, 選択肢2 AND Node B: YES", style: "dotted" },
-  { from: STATE_NODE_1, to: NODE_ID_C, label: "", style: "solid" },
-  { from: NODE_ID_B, to: STATE_NODE_2, label: "Node A: 選択肢3 AND Node B: YES", style: "dotted" },
-  { from: STATE_NODE_2, to: NODE_ID_E, label: "", style: "solid" },
-  { from: NODE_ID_B, to: NODE_ID_G, label: "NO", style: "solid" },
+  { from: NODE_ID_B, to: NODE_ID_E, label: "NO", style: "solid" },
 ];
 
 export default function Home() {
@@ -107,8 +100,6 @@ export default function Home() {
     setNodes: setCustomNodes,
     setEdges: setCustomEdges,
     editingChoicesIndex,
-    displayNodes,
-    displayEdges,
     coverageResults,
     coverageMap,
     addNode: handleAddNode,
@@ -135,7 +126,6 @@ export default function Home() {
     selectedEdgeIndex,
     selectedEdge,
     selectedEdgeSourceNode,
-    selectedEdgeStateNode,
     selectedEdgeConditionNodes,
     openEdgeDialog,
     closeEdgeDialog,
@@ -165,13 +155,10 @@ export default function Home() {
 
   // ノードクリック時のハンドラ
   const handleNodeClick = useCallback((nodeId: string) => {
-    if (isStateNode(nodeId)) return;
-
     let node = currentDefinition.nodes.find(n => n.id === nodeId);
     if (!node) {
       node = currentDefinition.nodes.find(n => n.label === nodeId);
     }
-    if (node && isStateNode(node.id)) return;
 
     if (node) {
       const reachableNodes = getReachableQuestionNodes(node.id, customNodes, customEdges);
@@ -191,28 +178,17 @@ export default function Home() {
       }]);
     }
 
+    // 複合条件をエッジに直接設定
     if (result.compoundCondition && result.compoundCondition.conditions.length > 0) {
-      const stateNodeId = generateStateNodeId(result.compoundCondition.conditions);
-      const stateNodeLabel = generateStateNodeLabel(result.compoundCondition.conditions, customNodes);
-      const existingStateNode = customNodes.find(n => n.id === stateNodeId);
+      const compoundLabel = generateCompoundConditionLabel(result.compoundCondition, customNodes);
 
-      if (!existingStateNode) {
-        setCustomNodes(prev => [...prev, {
-          id: stateNodeId,
-          label: stateNodeLabel,
-          shape: 'hexagon',
-          compoundCondition: result.compoundCondition,
-        }]);
-      }
-
-      const compoundLabel = generateCompoundConditionEdgeLabel(result.compoundCondition.conditions, customNodes);
-
-      const newEdges: CustomEdge[] = [
-        { from: selectedSourceNode.id, to: stateNodeId, label: compoundLabel, style: 'dotted' },
-        { from: stateNodeId, to: result.targetNodeId, label: result.label, style: result.style },
-      ];
-
-      setCustomEdges(prev => [...prev, ...newEdges]);
+      setCustomEdges(prev => [...prev, {
+        from: selectedSourceNode.id,
+        to: result.targetNodeId,
+        label: compoundLabel,
+        style: result.style,
+        compoundCondition: result.compoundCondition,
+      }]);
     } else {
       setCustomEdges(prev => [...prev, {
         from: selectedSourceNode.id,
@@ -244,26 +220,15 @@ export default function Home() {
     }));
   }, [setCustomNodes]);
 
-  // ノード削除のハンドラ（連鎖削除）
+  // ノード削除のハンドラ
   const handleDeleteNode = useCallback((nodeId: string) => {
-    if (isStateNode(nodeId)) return;
-
-    const relatedStateNodes = customNodes.filter(node =>
-      isStateNode(node.id) &&
-      node.compoundCondition?.conditions.some(c => c.nodeId === nodeId)
-    );
-    const stateNodeIds = relatedStateNodes.map(n => n.id);
-
+    // このノードに関連するエッジを削除
     const newEdges = customEdges.filter(edge =>
-      edge.from !== nodeId &&
-      edge.to !== nodeId &&
-      !stateNodeIds.includes(edge.from) &&
-      !stateNodeIds.includes(edge.to)
+      edge.from !== nodeId && edge.to !== nodeId
     );
 
-    const newNodes = customNodes.filter(node =>
-      node.id !== nodeId && !stateNodeIds.includes(node.id)
-    );
+    // ノードを削除
+    const newNodes = customNodes.filter(node => node.id !== nodeId);
 
     setCustomNodes(newNodes);
     setCustomEdges(newEdges);
@@ -299,57 +264,22 @@ export default function Home() {
     if (selectedEdgeIndex === null) return;
     setCustomEdges(prev => prev.map((edge, index) => {
       if (index !== selectedEdgeIndex) return edge;
-      return { ...edge, label: update.label, style: update.style, condition: update.condition };
+      return {
+        ...edge,
+        label: update.label,
+        style: update.style,
+        condition: update.condition,
+        compoundCondition: update.compoundCondition,
+      };
     }));
   }, [selectedEdgeIndex, setCustomEdges]);
 
   // エッジ削除のハンドラ（ダイアログから）
   const handleDeleteEdge = useCallback(() => {
     if (selectedEdgeIndex === null) return;
-
-    const edgeToDelete = customEdges[selectedEdgeIndex];
-
-    if (edgeToDelete && isStateNode(edgeToDelete.to)) {
-      const stateNodeId = edgeToDelete.to;
-      setCustomNodes(prev => prev.filter(n => n.id !== stateNodeId));
-      setCustomEdges(prev => prev.filter(e => e.from !== stateNodeId && e.to !== stateNodeId));
-    } else {
-      setCustomEdges(prev => prev.filter((_, index) => index !== selectedEdgeIndex));
-    }
-
+    setCustomEdges(prev => prev.filter((_, index) => index !== selectedEdgeIndex));
     setSelectedEdgeIndex(null);
-  }, [selectedEdgeIndex, customEdges, setCustomNodes, setCustomEdges, setSelectedEdgeIndex]);
-
-  // 複合条件更新のハンドラ
-  const handleUpdateCompoundCondition = useCallback((update: CompoundConditionUpdateResult) => {
-    if (selectedEdgeIndex === null || !selectedEdgeStateNode) return;
-
-    const oldStateNodeId = selectedEdgeStateNode.id;
-    const newStateNodeId = generateStateNodeId(update.compoundCondition.conditions);
-    const newStateNodeLabel = generateStateNodeLabel(update.compoundCondition.conditions, customNodes);
-
-    setCustomNodes(prev => prev.map(node => {
-      if (node.id !== oldStateNodeId) return node;
-      return {
-        ...node,
-        id: newStateNodeId,
-        label: newStateNodeLabel,
-        compoundCondition: update.compoundCondition,
-      };
-    }));
-
-    setCustomEdges(prev => prev.map(edge => {
-      if (edge.to === oldStateNodeId) {
-        return { ...edge, to: newStateNodeId, label: update.label };
-      }
-      if (edge.from === oldStateNodeId) {
-        return { ...edge, from: newStateNodeId };
-      }
-      return edge;
-    }));
-
-    setSelectedEdgeIndex(null);
-  }, [selectedEdgeIndex, selectedEdgeStateNode, customNodes, setCustomNodes, setCustomEdges, setSelectedEdgeIndex]);
+  }, [selectedEdgeIndex, setCustomEdges, setSelectedEdgeIndex]);
 
   // ========== レンダリング ==========
 
@@ -369,7 +299,6 @@ export default function Home() {
         {/* 左パネル: サイドバー */}
         <Sidebar
           nodes={customNodes}
-          displayNodes={displayNodes}
           coverageMap={coverageMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={handleAddNode}
@@ -380,7 +309,6 @@ export default function Home() {
           onRemoveChoice={handleRemoveChoice}
           onUpdateChoice={handleUpdateChoice}
           edges={customEdges}
-          displayEdges={displayEdges}
           onAddEdge={handleAddEdge}
           onUpdateEdge={handleUpdateEdgeDirect}
           onRemoveEdge={handleRemoveEdge}
@@ -411,7 +339,7 @@ export default function Home() {
           questionCategory: customNodes.find(n => n.id === selectedSourceNode.id)?.questionCategory,
           choices: customNodes.find(n => n.id === selectedSourceNode.id)?.choices,
         } : null}
-        availableNodes={currentDefinition.nodes.filter(n => !isStateNode(n.id))}
+        availableNodes={currentDefinition.nodes}
         conditionNodes={reachableConditionNodes}
         onAddCondition={handleAddCondition}
         onUpdateNode={handleUpdateNode}
@@ -436,10 +364,8 @@ export default function Home() {
         onClose={closeEdgeDialog}
         edge={selectedEdge}
         sourceNode={selectedEdgeSourceNode}
-        stateNode={selectedEdgeStateNode}
         conditionNodes={selectedEdgeConditionNodes}
         onUpdateEdge={handleUpdateEdge}
-        onUpdateCompoundCondition={handleUpdateCompoundCondition}
         onDeleteEdge={handleDeleteEdge}
       />
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { CustomNode, CustomEdge, isStateNode } from '@/types/flowchart';
+import { CustomNode, CustomEdge } from '@/types/flowchart';
 import { checkChoiceCoverage, CoverageResult } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
 
@@ -16,16 +16,6 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
   const [editingChoicesIndex, setEditingChoicesIndex] = useState<number | null>(null);
 
   // ========== 派生データ ==========
-
-  // サイドパネル表示用（状態ノードを除外）
-  const displayNodes = useMemo(() => {
-    return nodes.filter(node => !isStateNode(node.id));
-  }, [nodes]);
-
-  // サイドパネル表示用エッジ（状態ノード関連を除外）
-  const displayEdges = useMemo(() => {
-    return edges.filter(edge => !isStateNode(edge.from) && !isStateNode(edge.to));
-  }, [edges]);
 
   // 選択肢の網羅性チェック結果
   const coverageResults = useMemo(() => {
@@ -45,7 +35,7 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
 
   const addNode = useCallback(() => {
     const newId = generateUUID();
-    const nodeNumber = nodes.filter(n => !isStateNode(n.id)).length + 1;
+    const nodeNumber = nodes.length + 1;
     setNodes(prev => [...prev, { id: newId, label: `Node ${nodeNumber}`, shape: 'rectangle' }]);
   }, [nodes]);
 
@@ -62,19 +52,6 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     setNodes(prev => prev.filter((_, i) => i !== index));
     setEdges(prev => prev.filter(e => e.from !== nodeId && e.to !== nodeId));
   }, [nodes]);
-
-  const updateNodeId = useCallback((index: number, oldId: string, newId: string) => {
-    setNodes(prev => {
-      const newNodes = [...prev];
-      newNodes[index] = { ...newNodes[index], id: newId };
-      return newNodes;
-    });
-    setEdges(prev => prev.map(edge => ({
-      ...edge,
-      from: edge.from === oldId ? newId : edge.from,
-      to: edge.to === oldId ? newId : edge.to,
-    })));
-  }, []);
 
   const toggleChoicesEdit = useCallback((index: number) => {
     setEditingChoicesIndex(prev => prev === index ? null : index);
@@ -145,15 +122,12 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     setEdges,
     editingChoicesIndex,
     // Derived data
-    displayNodes,
-    displayEdges,
     coverageResults,
     coverageMap,
     // Node actions
     addNode,
     updateNode,
     removeNode,
-    updateNodeId,
     toggleChoicesEdit,
     addChoice,
     removeChoice,

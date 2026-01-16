@@ -19,6 +19,7 @@ export interface EdgeInfo {
   label: string;
   style: EdgeStyle;
   condition?: EdgeCondition;
+  compoundCondition?: CompoundCondition;
 }
 
 /** ソースノード情報 */
@@ -29,24 +30,12 @@ export interface SourceNodeInfo {
   choices?: ChoiceOption[];
 }
 
-/** 状態ノード情報（複合条件用） */
-export interface StateNodeInfo {
-  id: string;
-  label: string;
-  compoundCondition: CompoundCondition;
-}
-
 /** エッジ更新結果 */
 export interface EdgeUpdateResult {
   label: string;
   style: EdgeStyle;
   condition?: EdgeCondition;
-}
-
-/** 複合条件更新結果 */
-export interface CompoundConditionUpdateResult {
-  compoundCondition: CompoundCondition;
-  label: string;
+  compoundCondition?: CompoundCondition;
 }
 
 interface EdgeEditDialogProps {
@@ -56,14 +45,10 @@ interface EdgeEditDialogProps {
   edge: EdgeInfo | null;
   /** ソースノードの情報（単一条件編集用） */
   sourceNode?: SourceNodeInfo;
-  /** 状態ノード情報（複合条件編集用） */
-  stateNode?: StateNodeInfo;
   /** 複合条件に関連するノード情報 */
   conditionNodes?: SourceNodeInfo[];
   /** エッジ更新時のコールバック */
   onUpdateEdge: (update: EdgeUpdateResult) => void;
-  /** 複合条件更新時のコールバック */
-  onUpdateCompoundCondition?: (update: CompoundConditionUpdateResult) => void;
   /** エッジ削除時のコールバック */
   onDeleteEdge: () => void;
 }
@@ -73,10 +58,8 @@ export default function EdgeEditDialog({
   onClose,
   edge,
   sourceNode,
-  stateNode,
   conditionNodes = [],
   onUpdateEdge,
-  onUpdateCompoundCondition,
   onDeleteEdge,
 }: EdgeEditDialogProps) {
   // エッジ編集用の状態
@@ -91,7 +74,7 @@ export default function EdgeEditDialog({
   const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
 
   // 複合条件エッジかどうか
-  const isCompoundConditionEdge = !!stateNode?.compoundCondition;
+  const isCompoundConditionEdge = !!edge?.compoundCondition;
 
   // ダイアログが開いたときに状態を初期化
   useEffect(() => {
@@ -99,9 +82,9 @@ export default function EdgeEditDialog({
       setEdgeLabel(edge.label);
 
       // 複合条件の場合
-      if (stateNode?.compoundCondition) {
+      if (edge.compoundCondition) {
         const condMap = new Map<string, SingleCondition>();
-        stateNode.compoundCondition.conditions.forEach(cond => {
+        edge.compoundCondition.conditions.forEach(cond => {
           condMap.set(cond.nodeId, cond);
         });
         setCompoundConditions(condMap);
@@ -124,7 +107,7 @@ export default function EdgeEditDialog({
         }
       }
     }
-  }, [isOpen, edge, stateNode]);
+  }, [isOpen, edge]);
 
   // ソースノードの設問カテゴリに基づく判定（単一条件用）
   const hasChoices = !isCompoundConditionEdge &&
@@ -184,7 +167,7 @@ export default function EdgeEditDialog({
   const handleSave = () => {
     if (!edge) return;
 
-    if (isCompoundConditionEdge && onUpdateCompoundCondition) {
+    if (isCompoundConditionEdge) {
       // 複合条件の更新
       const conditions = Array.from(compoundConditions.values());
       const compoundCondition: CompoundCondition = {
@@ -192,7 +175,11 @@ export default function EdgeEditDialog({
         operator: 'AND',
       };
       const label = generateCompoundConditionLabel();
-      onUpdateCompoundCondition({ compoundCondition, label });
+      onUpdateEdge({
+        label,
+        style: edge.style,
+        compoundCondition,
+      });
       onClose();
       return;
     }
@@ -223,10 +210,7 @@ export default function EdgeEditDialog({
 
   // 削除処理
   const handleDelete = () => {
-    const message = isCompoundConditionEdge
-      ? 'このエッジと関連する状態ノードを削除しますか？'
-      : 'このエッジを削除しますか？';
-    if (confirm(message)) {
+    if (confirm('このエッジを削除しますか？')) {
       onDeleteEdge();
       onClose();
     }
@@ -502,7 +486,7 @@ export default function EdgeEditDialog({
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              {isCompoundConditionEdge ? 'このエッジと状態ノードを削除' : 'このエッジを削除'}
+              このエッジを削除
             </button>
           </div>
         </div>
