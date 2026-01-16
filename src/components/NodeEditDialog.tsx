@@ -667,26 +667,18 @@ export default function NodeEditDialog({
                                     key={choice.id}
                                     type="button"
                                     onClick={() => {
-                                      if (node.questionCategory === 'SA') {
+                                      const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
+                                      const newChoices = isChoiceSelected
+                                        ? currentChoices.filter(id => id !== choice.id)
+                                        : [...currentChoices, choice.id];
+                                      if (newChoices.length > 0) {
                                         updateCompoundCondition(node.id, {
                                           nodeId: node.id,
                                           conditionType: 'choice',
-                                          choiceCondition: { choiceIds: [choice.id] },
+                                          choiceCondition: { choiceIds: newChoices },
                                         });
                                       } else {
-                                        const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                                        const newChoices = isChoiceSelected
-                                          ? currentChoices.filter(id => id !== choice.id)
-                                          : [...currentChoices, choice.id];
-                                        if (newChoices.length > 0) {
-                                          updateCompoundCondition(node.id, {
-                                            nodeId: node.id,
-                                            conditionType: 'choice',
-                                            choiceCondition: { choiceIds: newChoices },
-                                          });
-                                        } else {
-                                          updateCompoundCondition(node.id, null);
-                                        }
+                                        updateCompoundCondition(node.id, null);
                                       }
                                     }}
                                     className={`px-2 py-0.5 text-xs rounded ${
@@ -768,7 +760,7 @@ export default function NodeEditDialog({
               {currentHasChoices && !useCompoundCondition && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    分岐条件
+                    分岐条件（複数選択可）
                   </label>
                   <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg">
                     {nodeChoices.map(choice => (
@@ -776,14 +768,10 @@ export default function NodeEditDialog({
                         key={choice.id}
                         type="button"
                         onClick={() => {
-                          if (currentQuestionCategory === 'SA') {
-                            setSelectedChoiceIds([choice.id]);
+                          if (selectedChoiceIds.includes(choice.id)) {
+                            setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
                           } else {
-                            if (selectedChoiceIds.includes(choice.id)) {
-                              setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
-                            } else {
-                              setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
-                            }
+                            setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
                           }
                         }}
                         className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
