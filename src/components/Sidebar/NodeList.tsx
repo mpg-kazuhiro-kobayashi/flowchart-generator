@@ -1,7 +1,6 @@
 'use client';
 
 import { CustomNode, QuestionCategory } from '@/types/flowchart';
-import { validateNodeId } from '@/domain/validation';
 import { CoverageResult } from '@/domain/coverage';
 import { rangeToString } from '@/domain/numericRange';
 
@@ -22,11 +21,10 @@ interface NodeListProps {
   onAddNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
   onRemoveNode: (index: number) => void;
-  onUpdateNodeId: (index: number, oldId: string, newId: string) => void;
   onToggleChoicesEdit: (index: number) => void;
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
-  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => void;
+  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
 }
 
 export default function NodeList({
@@ -37,7 +35,6 @@ export default function NodeList({
   onAddNode,
   onUpdateNode,
   onRemoveNode,
-  onUpdateNodeId,
   onToggleChoicesEdit,
   onAddChoice,
   onRemoveChoice,
@@ -57,7 +54,6 @@ export default function NodeList({
       <div className="space-y-3">
         {displayNodes.map((node) => {
           const index = nodes.findIndex(n => n.id === node.id);
-          const idValidation = validateNodeId(node.id);
           const coverage = coverageMap.get(node.id);
           const hasWarning = coverage && !coverage.isCovered;
           return (
@@ -66,21 +62,6 @@ export default function NodeList({
             }`}>
               {/* 基本情報行 */}
               <div className="flex gap-2 items-center">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={node.id}
-                    onChange={e => onUpdateNodeId(index, node.id, e.target.value)}
-                    className={`w-16 px-2 py-1 text-xs border rounded bg-white text-gray-900 ${
-                      !idValidation.valid ? 'border-red-500 bg-red-50' : ''
-                    }`}
-                    placeholder="ID"
-                    title={idValidation.message || 'ノードID'}
-                  />
-                  {!idValidation.valid && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center" title={idValidation.message}>!</span>
-                  )}
-                </div>
                 <input
                   type="text"
                   value={node.label}
@@ -196,13 +177,6 @@ export default function NodeList({
                     <div className="space-y-1">
                       {node.choices.map((choice, choiceIndex) => (
                         <div key={choiceIndex} className="flex gap-1 items-center">
-                          <input
-                            type="text"
-                            value={choice.id}
-                            onChange={e => onUpdateChoice(index, choiceIndex, 'id', e.target.value)}
-                            className="w-20 px-1 py-0.5 text-xs border rounded bg-white text-gray-900"
-                            placeholder="ID"
-                          />
                           <input
                             type="text"
                             value={choice.label}

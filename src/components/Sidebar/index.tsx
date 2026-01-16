@@ -14,11 +14,10 @@ interface SidebarProps {
   onAddNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
   onRemoveNode: (index: number) => void;
-  onUpdateNodeId: (index: number, oldId: string, newId: string) => void;
   onToggleChoicesEdit: (index: number) => void;
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
-  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => void;
+  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
   // エッジ関連
   edges: CustomEdge[];
   displayEdges: CustomEdge[];
@@ -38,7 +37,6 @@ export default function Sidebar({
   onAddNode,
   onUpdateNode,
   onRemoveNode,
-  onUpdateNodeId,
   onToggleChoicesEdit,
   onAddChoice,
   onRemoveChoice,
@@ -70,7 +68,6 @@ export default function Sidebar({
           onAddNode={onAddNode}
           onUpdateNode={onUpdateNode}
           onRemoveNode={onRemoveNode}
-          onUpdateNodeId={onUpdateNodeId}
           onToggleChoicesEdit={onToggleChoicesEdit}
           onAddChoice={onAddChoice}
           onRemoveChoice={onRemoveChoice}

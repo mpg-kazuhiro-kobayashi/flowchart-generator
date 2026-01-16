@@ -17,66 +17,85 @@ import {
   isStateNode,
 } from '@/types/flowchart';
 
+// 初期ノードID（固定値 - SSR/CSR で一貫性を保つため）
+// 新規作成時は generateUUID() で動的に生成される
+const NODE_ID_A = 'node_a1b2c3d4e5f6';
+const NODE_ID_B = 'node_b2c3d4e5f6g7';
+const NODE_ID_C = 'node_c3d4e5f6g7h8';
+const NODE_ID_E = 'node_e5f6g7h8i9j0';
+const NODE_ID_G = 'node_g7h8i9j0k1l2';
+
+// 選択肢ID（固定値）
+const CHOICE_A_OPT1 = 'choice_a1opt1xxxxx';
+const CHOICE_A_OPT2 = 'choice_a1opt2xxxxx';
+const CHOICE_A_OPT3 = 'choice_a1opt3xxxxx';
+const CHOICE_B_OPT1 = 'choice_b1opt1xxxxx';
+const CHOICE_B_OPT2 = 'choice_b1opt2xxxxx';
+
+// 状態ノードID
+const STATE_NODE_1 = `_state_${NODE_ID_A}_${CHOICE_A_OPT1}_${CHOICE_A_OPT2}_${NODE_ID_B}_${CHOICE_B_OPT1}`;
+const STATE_NODE_2 = `_state_${NODE_ID_A}_${CHOICE_A_OPT3}_${NODE_ID_B}_${CHOICE_B_OPT1}`;
+
 // 初期ノードデータ
 const initialNodes: CustomNode[] = [
   {
-    id: "A",
+    id: NODE_ID_A,
     label: "Node A",
     shape: "rectangle",
     questionCategory: "MA",
     choices: [
-      { id: "A_opt1", label: "選択肢1" },
-      { id: "A_opt2", label: "選択肢2" },
-      { id: "A_opt3", label: "選択肢3" },
+      { id: CHOICE_A_OPT1, label: "選択肢1" },
+      { id: CHOICE_A_OPT2, label: "選択肢2" },
+      { id: CHOICE_A_OPT3, label: "選択肢3" },
     ],
   },
   {
-    id: "B",
+    id: NODE_ID_B,
     label: "Node B",
     shape: "rectangle",
     questionCategory: "SA",
     choices: [
-      { id: "B_opt1", label: "YES" },
-      { id: "B_opt2", label: "NO" },
+      { id: CHOICE_B_OPT1, label: "YES" },
+      { id: CHOICE_B_OPT2, label: "NO" },
     ],
   },
-  { id: "C", label: "Node C", shape: "rectangle" },
+  { id: NODE_ID_C, label: "Node C", shape: "rectangle" },
   {
-    id: "_state_A_A_opt1_A_opt2_B_B_opt1",
+    id: STATE_NODE_1,
     label: "Node A: 選択肢1, 選択肢2 AND Node B: YES",
     shape: "hexagon",
     compoundCondition: {
       conditions: [
-        { nodeId: "A", conditionType: "choice", choiceCondition: { choiceIds: ["A_opt1", "A_opt2"] } },
-        { nodeId: "B", conditionType: "choice", choiceCondition: { choiceIds: ["B_opt1"] } },
+        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT1, CHOICE_A_OPT2] } },
+        { nodeId: NODE_ID_B, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_B_OPT1] } },
       ],
       operator: "AND",
     },
   },
-  { id: "E", label: "Node E", shape: "rectangle" },
+  { id: NODE_ID_E, label: "Node E", shape: "rectangle" },
   {
-    id: "_state_A_A_opt3_B_B_opt1",
+    id: STATE_NODE_2,
     label: "Node A: 選択肢3 AND Node B: YES",
     shape: "hexagon",
     compoundCondition: {
       conditions: [
-        { nodeId: "A", conditionType: "choice", choiceCondition: { choiceIds: ["A_opt3"] } },
-        { nodeId: "B", conditionType: "choice", choiceCondition: { choiceIds: ["B_opt1"] } },
+        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT3] } },
+        { nodeId: NODE_ID_B, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_B_OPT1] } },
       ],
       operator: "AND",
     },
   },
-  { id: "G", label: "Node G", shape: "rectangle" },
+  { id: NODE_ID_G, label: "Node G", shape: "rectangle" },
 ];
 
 // 初期エッジデータ
 const initialEdges: CustomEdge[] = [
-  { from: "A", to: "B", label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
-  { from: "B", to: "_state_A_A_opt1_A_opt2_B_B_opt1", label: "Node A: 選択肢1, 選択肢2 AND Node B: YES", style: "dotted" },
-  { from: "_state_A_A_opt1_A_opt2_B_B_opt1", to: "C", label: "", style: "solid" },
-  { from: "B", to: "_state_A_A_opt3_B_B_opt1", label: "Node A: 選択肢3 AND Node B: YES", style: "dotted" },
-  { from: "_state_A_A_opt3_B_B_opt1", to: "E", label: "", style: "solid" },
-  { from: "B", to: "G", label: "NO", style: "solid" },
+  { from: NODE_ID_A, to: NODE_ID_B, label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
+  { from: NODE_ID_B, to: STATE_NODE_1, label: "Node A: 選択肢1, 選択肢2 AND Node B: YES", style: "dotted" },
+  { from: STATE_NODE_1, to: NODE_ID_C, label: "", style: "solid" },
+  { from: NODE_ID_B, to: STATE_NODE_2, label: "Node A: 選択肢3 AND Node B: YES", style: "dotted" },
+  { from: STATE_NODE_2, to: NODE_ID_E, label: "", style: "solid" },
+  { from: NODE_ID_B, to: NODE_ID_G, label: "NO", style: "solid" },
 ];
 
 export default function Home() {
@@ -95,7 +114,6 @@ export default function Home() {
     addNode: handleAddNode,
     updateNode: handleUpdateNodeDirect,
     removeNode: handleRemoveNode,
-    updateNodeId: handleUpdateNodeId,
     toggleChoicesEdit: handleToggleChoicesEdit,
     addChoice: handleAddChoice,
     removeChoice: handleRemoveChoice,
@@ -357,7 +375,6 @@ export default function Home() {
           onAddNode={handleAddNode}
           onUpdateNode={handleUpdateNodeDirect}
           onRemoveNode={handleRemoveNode}
-          onUpdateNodeId={handleUpdateNodeId}
           onToggleChoicesEdit={handleToggleChoicesEdit}
           onAddChoice={handleAddChoice}
           onRemoveChoice={handleRemoveChoice}

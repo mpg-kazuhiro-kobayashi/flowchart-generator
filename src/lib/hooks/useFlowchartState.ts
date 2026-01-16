@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { CustomNode, CustomEdge, isStateNode } from '@/types/flowchart';
 import { checkChoiceCoverage, CoverageResult } from '@/domain/coverage';
+import { generateUUID } from '@/lib/uuid';
 
 /**
  * フローチャートのノードとエッジの状態管理フック
@@ -43,9 +44,10 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
   // ========== ノード操作 ==========
 
   const addNode = useCallback(() => {
-    const newId = String.fromCharCode(65 + nodes.length);
-    setNodes(prev => [...prev, { id: newId, label: `Node ${newId}`, shape: 'rectangle' }]);
-  }, [nodes.length]);
+    const newId = generateUUID();
+    const nodeNumber = nodes.filter(n => !isStateNode(n.id)).length + 1;
+    setNodes(prev => [...prev, { id: newId, label: `Node ${nodeNumber}`, shape: 'rectangle' }]);
+  }, [nodes]);
 
   const updateNode = useCallback((index: number, updates: Partial<CustomNode>) => {
     setNodes(prev => {
@@ -83,7 +85,7 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
       const newNodes = [...prev];
       const node = newNodes[nodeIndex];
       const choices = node.choices || [];
-      const newChoiceId = `${node.id}_opt${choices.length + 1}`;
+      const newChoiceId = generateUUID();
       newNodes[nodeIndex] = {
         ...node,
         choices: [...choices, { id: newChoiceId, label: `選択肢${choices.length + 1}` }],

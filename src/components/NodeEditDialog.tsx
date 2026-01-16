@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
-import { validateNodeId } from '@/domain/validation';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
+import { generateUUID } from '@/lib/uuid';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -97,7 +97,6 @@ export default function NodeEditDialog({
   // 接続追加用の状態
   const [targetType, setTargetType] = useState<'existing' | 'new'>('existing');
   const [selectedTargetId, setSelectedTargetId] = useState<string>('');
-  const [newNodeId, setNewNodeId] = useState('');
   const [newNodeLabel, setNewNodeLabel] = useState('');
   const [conditionLabel, setConditionLabel] = useState('');
 
@@ -121,7 +120,6 @@ export default function NodeEditDialog({
       // 接続追加を初期化
       setTargetType('existing');
       setSelectedTargetId(availableNodes.length > 0 ? availableNodes[0].id : '');
-      setNewNodeId('');
       setNewNodeLabel('');
       setConditionLabel('');
       setSelectedChoiceIds([]);
@@ -161,7 +159,7 @@ export default function NodeEditDialog({
 
   // 選択肢追加
   const addChoice = () => {
-    const newId = `${sourceNode?.id}_opt${nodeChoices.length + 1}`;
+    const newId = generateUUID();
     setNodeChoices([...nodeChoices, { id: newId, label: `選択肢${nodeChoices.length + 1}` }]);
   };
 
@@ -171,7 +169,7 @@ export default function NodeEditDialog({
   };
 
   // 選択肢更新
-  const updateChoice = (index: number, field: 'id' | 'label', value: string) => {
+  const updateChoice = (index: number, field: 'label', value: string) => {
     const newChoices = [...nodeChoices];
     newChoices[index][field] = value;
     setNodeChoices(newChoices);
@@ -208,6 +206,7 @@ export default function NodeEditDialog({
         operator: 'AND',
       };
 
+      const newNodeId = generateUUID();
       const targetNodeId = targetType === 'existing' ? selectedTargetId : newNodeId;
       const result: AddConditionResult = {
         targetNodeId,
@@ -216,7 +215,7 @@ export default function NodeEditDialog({
         compoundCondition,
       };
 
-      if (targetType === 'new' && newNodeId && newNodeLabel) {
+      if (targetType === 'new' && newNodeLabel) {
         result.createNewNode = {
           id: newNodeId,
           label: newNodeLabel,
@@ -250,7 +249,8 @@ export default function NodeEditDialog({
         style: 'solid',
         condition,
       });
-    } else if (targetType === 'new' && newNodeId && newNodeLabel) {
+    } else if (targetType === 'new' && newNodeLabel) {
+      const newNodeId = generateUUID();
       onAddCondition({
         targetNodeId: newNodeId,
         label: finalLabel,
@@ -280,7 +280,7 @@ export default function NodeEditDialog({
   // バリデーション
   const isTargetValid = targetType === 'existing'
     ? !!selectedTargetId
-    : !!(newNodeId && newNodeLabel && validateNodeId(newNodeId).valid);
+    : !!newNodeLabel.trim();
 
   const isConditionValid = (() => {
     if (useCompoundCondition) {
@@ -457,13 +457,6 @@ export default function NodeEditDialog({
                         <div key={index} className="flex gap-2 items-center bg-white p-2 rounded border border-gray-200">
                           <input
                             type="text"
-                            value={choice.id}
-                            onChange={e => updateChoice(index, 'id', e.target.value)}
-                            className="w-24 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
-                            placeholder="ID"
-                          />
-                          <input
-                            type="text"
                             value={choice.label}
                             onChange={e => updateChoice(index, 'label', e.target.value)}
                             className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
@@ -594,42 +587,21 @@ export default function NodeEditDialog({
               )}
 
               {/* 新規ノード作成 */}
-              {targetType === 'new' && (() => {
-                const idValidation = validateNodeId(newNodeId);
-                return (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ノードID
-                      </label>
-                      <input
-                        type="text"
-                        value={newNodeId}
-                        onChange={e => setNewNodeId(e.target.value)}
-                        placeholder="例: Node1"
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 ${
-                          newNodeId && !idValidation.valid ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                      />
-                      {newNodeId && !idValidation.valid && (
-                        <p className="mt-1 text-xs text-red-600">{idValidation.message}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ノードラベル
-                      </label>
-                      <input
-                        type="text"
-                        value={newNodeLabel}
-                        onChange={e => setNewNodeLabel(e.target.value)}
-                        placeholder="例: 新しい処理"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                      />
-                    </div>
-                  </div>
-                );
-              })()}
+              {targetType === 'new' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ノードラベル
+                  </label>
+                  <input
+                    type="text"
+                    value={newNodeLabel}
+                    onChange={e => setNewNodeLabel(e.target.value)}
+                    placeholder="例: 新しい処理"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">IDは自動的に生成されます</p>
+                </div>
+              )}
 
               {/* 複合条件の切り替え */}
               {conditionNodes.length >= 2 && (
