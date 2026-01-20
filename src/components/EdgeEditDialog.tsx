@@ -283,26 +283,19 @@ export default function EdgeEditDialog({
                               key={choice.id}
                               type="button"
                               onClick={() => {
-                                if (node.questionCategory === 'SA') {
+                                // SA/MA どちらも複数選択可能
+                                const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
+                                const newChoices = isChoiceSelected
+                                  ? currentChoices.filter(id => id !== choice.id)
+                                  : [...currentChoices, choice.id];
+                                if (newChoices.length > 0) {
                                   updateCompoundCondition(node.id, {
                                     nodeId: node.id,
                                     conditionType: 'choice',
-                                    choiceCondition: { choiceIds: [choice.id] },
+                                    choiceCondition: { choiceIds: newChoices },
                                   });
                                 } else {
-                                  const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                                  const newChoices = isChoiceSelected
-                                    ? currentChoices.filter(id => id !== choice.id)
-                                    : [...currentChoices, choice.id];
-                                  if (newChoices.length > 0) {
-                                    updateCompoundCondition(node.id, {
-                                      nodeId: node.id,
-                                      conditionType: 'choice',
-                                      choiceCondition: { choiceIds: newChoices },
-                                    });
-                                  } else {
-                                    updateCompoundCondition(node.id, null);
-                                  }
+                                  updateCompoundCondition(node.id, null);
                                 }
                               }}
                               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
@@ -407,14 +400,11 @@ export default function EdgeEditDialog({
                     key={choice.id}
                     type="button"
                     onClick={() => {
-                      if (sourceNode.questionCategory === 'SA') {
-                        setSelectedChoiceIds([choice.id]);
+                      // SA/MA どちらも複数選択可能
+                      if (selectedChoiceIds.includes(choice.id)) {
+                        setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
                       } else {
-                        if (selectedChoiceIds.includes(choice.id)) {
-                          setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
-                        } else {
-                          setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
-                        }
+                        setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
                       }
                     }}
                     className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
