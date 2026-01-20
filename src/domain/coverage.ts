@@ -83,30 +83,27 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
     // SA/MAの場合: 選択肢の網羅性をチェック
     if ((node.questionCategory === 'SA' || node.questionCategory === 'MA') && choices.length > 0) {
-      // エッジのラベルから使用されている選択肢を抽出
+      // このノードから直接出るエッジの条件のみをチェック
       for (const edge of outgoingEdges) {
+        // 1. エッジのラベルから使用されている選択肢を抽出
         if (edge.label) {
-          // ラベルに含まれる選択肢を探す
           for (const choice of choices) {
             if (edge.label.includes(choice.label)) {
               usedChoiceIds.add(choice.id);
             }
           }
         }
-      }
 
-      // 複合条件を持つエッジから使用されている選択肢をチェック
-      for (const edge of edges) {
-        if (!edge.compoundCondition) continue;
-
-        for (const condition of edge.compoundCondition.conditions) {
-          if (condition.nodeId === node.id && condition.choiceCondition) {
-            for (const choiceId of condition.choiceCondition.choiceIds) {
-              usedChoiceIds.add(choiceId);
-            }
+        // 2. エッジに直接設定された条件をチェック
+        if (edge.condition?.choiceIds) {
+          for (const choiceId of edge.condition.choiceIds) {
+            usedChoiceIds.add(choiceId);
           }
         }
       }
+
+      // 注意: 複合条件内でこのノードの選択肢が使用されていても、
+      // それは下流ノードの分岐条件であり、このノード自身の網羅性には含めない
 
       const unusedChoices = choices.filter(c => !usedChoiceIds.has(c.id));
 
@@ -125,7 +122,7 @@ export function checkChoiceCoverage<T extends GraphNode>(
     else if (node.questionCategory === 'NA') {
       const ranges: NumericRange[] = [];
 
-      // 1. 直接のエッジから数値条件を収集
+      // このノードから直接出るエッジの数値条件のみを収集
       for (const edge of outgoingEdges) {
         if (edge.condition?.numericCondition) {
           const { operator, value } = edge.condition.numericCondition;
@@ -133,19 +130,10 @@ export function checkChoiceCoverage<T extends GraphNode>(
         }
       }
 
-      // 2. 複合条件を持つエッジから数値条件を収集
-      for (const edge of edges) {
-        if (!edge.compoundCondition) continue;
+      // 注意: 複合条件内でこのノードの数値条件が使用されていても、
+      // それは下流ノードの分岐条件であり、このノード自身の網羅性には含めない
 
-        for (const condition of edge.compoundCondition.conditions) {
-          if (condition.nodeId === node.id && condition.numericCondition) {
-            const { operator, value } = condition.numericCondition;
-            ranges.push(operatorToRange(operator, value));
-          }
-        }
-      }
-
-      // 3. ギャップを検出
+      // ギャップを検出
       const numericGaps = findNumericGaps(ranges);
       const isCovered = numericGaps.length === 0 && hasOutgoingEdges;
 
