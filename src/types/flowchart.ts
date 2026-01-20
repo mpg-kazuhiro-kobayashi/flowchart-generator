@@ -104,12 +104,6 @@ export interface FlowchartNode {
   shape?: NodeShape;
   /** スタイルクラス名 */
   className?: string;
-  /** クリック時のコールバック関数名またはURL */
-  click?: {
-    type: 'callback' | 'link';
-    target: string;
-    tooltip?: string;
-  };
   /** 設問カテゴリ（設問ノードの場合） */
   questionCategory?: QuestionCategory;
   /** 選択肢（SA/MAの場合） */

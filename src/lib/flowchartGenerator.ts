@@ -58,13 +58,6 @@ export class FlowchartGenerator {
       }
     }
 
-    // クリックイベント定義
-    for (const node of definition.nodes) {
-      if (node.click) {
-        lines.push(`    ${this.generateClickEvent(node)}`);
-      }
-    }
-
     return lines.join('\n');
   }
 
@@ -247,22 +240,6 @@ export class FlowchartGenerator {
       .join(',');
 
     return `linkStyle ${linkStyle.linkIndex} ${styleStr}`;
-  }
-
-  /**
-   * クリックイベント定義を生成
-   */
-  private static generateClickEvent(node: FlowchartNode): string {
-    if (!node.click) return '';
-
-    const { type, target, tooltip } = node.click;
-    const tooltipStr = tooltip ? ` "${tooltip}"` : '';
-
-    if (type === 'callback') {
-      return `click ${node.id} call ${target}()${tooltipStr}`;
-    } else {
-      return `click ${node.id} "${target}"${tooltipStr}`;
-    }
   }
 }
 
