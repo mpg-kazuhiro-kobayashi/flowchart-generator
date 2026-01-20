@@ -10,6 +10,7 @@ import { NumericRange, operatorToRange, findNumericGaps, rangesOverlap, rangeCon
  */
 interface GraphNode {
   id: string;
+  label?: string;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
 }
@@ -83,7 +84,7 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
     // SA/MAの場合: 選択肢の網羅性をチェック
     if ((node.questionCategory === 'SA' || node.questionCategory === 'MA') && choices.length > 0) {
-      // このノードから直接出るエッジの条件のみをチェック
+      // このノードから直接出るエッジの条件をチェック
       for (const edge of outgoingEdges) {
         // 1. エッジのラベルから使用されている選択肢を抽出
         if (edge.label) {
@@ -94,16 +95,24 @@ export function checkChoiceCoverage<T extends GraphNode>(
           }
         }
 
-        // 2. エッジに直接設定された条件をチェック
+        // 2. エッジに直接設定された単一条件をチェック
         if (edge.condition?.choiceIds) {
           for (const choiceId of edge.condition.choiceIds) {
             usedChoiceIds.add(choiceId);
           }
         }
-      }
 
-      // 注意: 複合条件内でこのノードの選択肢が使用されていても、
-      // それは下流ノードの分岐条件であり、このノード自身の網羅性には含めない
+        // 3. エッジの複合条件内で、このノード自身の選択肢が使用されているかチェック
+        if (edge.compoundCondition) {
+          for (const condition of edge.compoundCondition.conditions) {
+            if (condition.nodeId === node.id && condition.choiceCondition) {
+              for (const choiceId of condition.choiceCondition.choiceIds) {
+                usedChoiceIds.add(choiceId);
+              }
+            }
+          }
+        }
+      }
 
       const unusedChoices = choices.filter(c => !usedChoiceIds.has(c.id));
 
@@ -122,16 +131,24 @@ export function checkChoiceCoverage<T extends GraphNode>(
     else if (node.questionCategory === 'NA') {
       const ranges: NumericRange[] = [];
 
-      // このノードから直接出るエッジの数値条件のみを収集
+      // このノードから直接出るエッジの数値条件を収集
       for (const edge of outgoingEdges) {
+        // 1. 単一条件の数値条件
         if (edge.condition?.numericCondition) {
           const { operator, value } = edge.condition.numericCondition;
           ranges.push(operatorToRange(operator, value));
         }
-      }
 
-      // 注意: 複合条件内でこのノードの数値条件が使用されていても、
-      // それは下流ノードの分岐条件であり、このノード自身の網羅性には含めない
+        // 2. 複合条件内で、このノード自身の数値条件が使用されているかチェック
+        if (edge.compoundCondition) {
+          for (const condition of edge.compoundCondition.conditions) {
+            if (condition.nodeId === node.id && condition.numericCondition) {
+              const { operator, value } = condition.numericCondition;
+              ranges.push(operatorToRange(operator, value));
+            }
+          }
+        }
+      }
 
       // ギャップを検出
       const numericGaps = findNumericGaps(ranges);
@@ -547,6 +564,343 @@ export function checkEdgeConditionConflicts<T extends GraphNode>(
     if (conflicts.length > 0) {
       results.push({ nodeId: sourceNodeId, conflicts });
     }
+  }
+
+  return results;
+}
+
+/**
+ * 組み合わせ条件の詳細
+ */
+export interface CombinationCondition {
+  nodeId: string;
+  nodeLabel: string;
+  choiceIds: string[];
+  choiceLabel: string;
+}
+
+/**
+ * 未カバーの組み合わせ
+ */
+export interface UncoveredCombination {
+  conditions: CombinationCondition[];
+}
+
+/**
+ * 複合条件の組み合わせ網羅性チェック結果
+ */
+export interface CompoundCoverageResult {
+  /** ノードID */
+  nodeId: string;
+  /** 複合条件の組み合わせ網羅性チェックが適用されるか */
+  hasCompoundConditions: boolean;
+  /** 関連するノードID */
+  relatedNodeIds: string[];
+  /** 未カバーの組み合わせ */
+  uncoveredCombinations: UncoveredCombination[];
+  /** 組み合わせが完全に網羅されているか */
+  isFullyCovered: boolean;
+}
+
+/**
+ * 選択肢の組み合わせを表す型（各ノードIDに対して選択されている選択肢IDの集合）
+ */
+type ChoiceCombination = Map<string, string[]>;
+
+/**
+ * 選択肢IDセットをソートして重複排除
+ */
+function normalizeChoiceSet(choiceIds: string[]): string[] {
+  return Array.from(new Set(choiceIds)).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * 選択肢IDセットの比較
+ */
+function areChoiceSetsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+/**
+ * 組み合わせの直積を生成
+ */
+function generateCartesianProduct(
+  nodeChoices: Map<string, string[][]>
+): ChoiceCombination[] {
+  const nodeIds = Array.from(nodeChoices.keys());
+  if (nodeIds.length === 0) return [];
+
+  const result: ChoiceCombination[] = [];
+
+  function generate(index: number, current: ChoiceCombination) {
+    if (index === nodeIds.length) {
+      result.push(new Map(current));
+      return;
+    }
+
+    const nodeId = nodeIds[index];
+    const choices = nodeChoices.get(nodeId) || [];
+
+    for (const choiceSet of choices) {
+      current.set(nodeId, [...choiceSet]);
+      generate(index + 1, current);
+    }
+  }
+
+  generate(0, new Map());
+  return result;
+}
+
+/**
+ * 組み合わせを文字列キーに変換（比較用）
+ */
+function combinationToKey(combination: ChoiceCombination): string {
+  const entries = Array.from(combination.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  return entries
+    .map(([nodeId, choiceIds]) => `${nodeId}:${choiceIds.join('&')}`)
+    .join('|');
+}
+
+/**
+ * matchType に応じた複数選択肢の組み合わせを関連ノード候補へ追加
+ */
+function addMatchTypeChoiceSets(
+  relatedNodeChoices: Map<string, string[][]>,
+  edges: GraphEdge[]
+): void {
+  for (const edge of edges) {
+    if (!edge.compoundCondition) continue;
+    for (const condition of edge.compoundCondition.conditions) {
+      const choiceCondition = condition.choiceCondition;
+      if (!choiceCondition) continue;
+      const { matchType, choiceIds } = choiceCondition;
+      if (!choiceIds || choiceIds.length === 0) continue;
+      if (matchType !== 'all' && matchType !== 'exact') continue;
+
+      const nodeChoices = relatedNodeChoices.get(condition.nodeId);
+      if (!nodeChoices) continue;
+      const normalized = normalizeChoiceSet(choiceIds);
+      if (!nodeChoices.some(existing => areChoiceSetsEqual(existing, normalized))) {
+        nodeChoices.push(normalized);
+      }
+    }
+  }
+}
+
+/**
+ * エッジの条件がカバーする組み合わせを計算
+ *
+ * @param edge エッジ
+ * @param sourceNodeId エッジの元ノードID
+ * @param relatedNodeChoices 関連ノードの選択肢マップ
+ * @param sourceNodeChoiceLabels ソースノードの選択肢ラベルからIDへのマップ
+ * @returns カバーされる組み合わせの配列
+ */
+function getEdgeCoveredCombinations(
+  edge: GraphEdge,
+  sourceNodeId: string,
+  relatedNodeChoices: Map<string, string[][]>,
+  sourceNodeChoiceLabels: Map<string, string>
+): ChoiceCombination[] {
+  const coveredCombinations: ChoiceCombination[] = [];
+  const relatedNodeIds = Array.from(relatedNodeChoices.keys());
+
+  const buildChoiceSets = (choiceIds: string[], matchType?: 'any' | 'all' | 'exact'): string[][] => {
+    if (!choiceIds || choiceIds.length === 0) {
+      return [];
+    }
+    if (matchType === 'all' || matchType === 'exact') {
+      return [normalizeChoiceSet(choiceIds)];
+    }
+    return choiceIds.map(choiceId => [choiceId]);
+  };
+
+  if (edge.compoundCondition) {
+    // 複合条件の場合：各ノードの条件を取得
+    const conditionsByNode = new Map<string, string[][]>();
+
+    for (const condition of edge.compoundCondition.conditions) {
+      if (condition.choiceCondition) {
+        const choiceSets = buildChoiceSets(
+          condition.choiceCondition.choiceIds,
+          condition.choiceCondition.matchType
+        );
+        if (choiceSets.length > 0) {
+          conditionsByNode.set(condition.nodeId, choiceSets);
+        }
+      }
+    }
+
+    // 複合条件に含まれないノードはワイルドカード（すべての選択肢）
+    for (const nodeId of relatedNodeIds) {
+      if (!conditionsByNode.has(nodeId)) {
+        conditionsByNode.set(nodeId, relatedNodeChoices.get(nodeId) || []);
+      }
+    }
+
+    // 条件の直積を生成
+    const combinations = generateCartesianProduct(conditionsByNode);
+    coveredCombinations.push(...combinations);
+  } else {
+    // 単一条件の場合：ソースノードの条件のみ、他はワイルドカード
+    const conditionsByNode = new Map<string, string[][]>();
+
+    // ソースノードの条件を設定
+    if (edge.condition?.choiceIds && edge.condition.choiceIds.length > 0) {
+      conditionsByNode.set(sourceNodeId, edge.condition.choiceIds.map(choiceId => [choiceId]));
+    } else if (edge.label) {
+      // ラベルから選択肢を抽出
+      const matchedChoiceIds: string[] = [];
+      for (const [label, id] of sourceNodeChoiceLabels) {
+        if (edge.label.includes(label)) {
+          matchedChoiceIds.push(id);
+        }
+      }
+      if (matchedChoiceIds.length > 0) {
+        conditionsByNode.set(sourceNodeId, matchedChoiceIds.map(choiceId => [choiceId]));
+      } else {
+        // マッチしない場合はスキップ（カバーなし）
+        return [];
+      }
+    } else {
+      // 条件もラベルもない場合はスキップ
+      return [];
+    }
+
+    // 他のノードはワイルドカード
+    for (const nodeId of relatedNodeIds) {
+      if (nodeId !== sourceNodeId) {
+        conditionsByNode.set(nodeId, relatedNodeChoices.get(nodeId) || []);
+      }
+    }
+
+    const combinations = generateCartesianProduct(conditionsByNode);
+    coveredCombinations.push(...combinations);
+  }
+
+  return coveredCombinations;
+}
+
+/**
+ * 複合条件の組み合わせ網羅性をチェック
+ *
+ * @param nodes 全ノードの配列
+ * @param edges 全エッジの配列
+ * @returns 各ノードの複合条件組み合わせ網羅性チェック結果
+ */
+export function checkCompoundConditionCoverage<T extends GraphNode>(
+  nodes: T[],
+  edges: GraphEdge[]
+): CompoundCoverageResult[] {
+  const results: CompoundCoverageResult[] = [];
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  // 各ノードをソースとするエッジをグループ化
+  const edgesBySource = new Map<string, GraphEdge[]>();
+  for (const edge of edges) {
+    const existing = edgesBySource.get(edge.from) || [];
+    existing.push(edge);
+    edgesBySource.set(edge.from, existing);
+  }
+
+  // 各設問ノードについてチェック
+  for (const node of nodes) {
+    // SA/MA ノードのみ対象
+    if (!node.questionCategory || node.questionCategory === 'FA' || node.questionCategory === 'NA') {
+      continue;
+    }
+
+    const outgoingEdges = edgesBySource.get(node.id) || [];
+    if (outgoingEdges.length === 0) continue;
+
+    // 複合条件を持つエッジがあるかチェック
+    const compoundConditionEdges = outgoingEdges.filter(e => e.compoundCondition);
+    if (compoundConditionEdges.length === 0) {
+      // 複合条件がない場合はスキップ（既存の単一網羅性チェックで対応）
+      continue;
+    }
+
+    // 複合条件に関連するノードIDを収集
+    const relatedNodeIds = new Set<string>();
+    relatedNodeIds.add(node.id); // ソースノード自身
+
+    for (const edge of compoundConditionEdges) {
+      if (edge.compoundCondition) {
+        for (const condition of edge.compoundCondition.conditions) {
+          relatedNodeIds.add(condition.nodeId);
+        }
+      }
+    }
+
+    // 関連ノードの選択肢を収集
+    const relatedNodeChoices = new Map<string, string[][]>();
+    for (const nodeId of relatedNodeIds) {
+      const relatedNode = nodeMap.get(nodeId);
+      if (relatedNode?.choices && relatedNode.choices.length > 0) {
+        relatedNodeChoices.set(nodeId, relatedNode.choices.map(c => [c.id]));
+      }
+    }
+
+    // 選択肢がないノードがある場合はスキップ
+    if (relatedNodeChoices.size !== relatedNodeIds.size) {
+      continue;
+    }
+
+    // matchType が all/exact の複合条件があれば組み合わせ候補に追加
+    addMatchTypeChoiceSets(relatedNodeChoices, compoundConditionEdges);
+
+    // ソースノードの選択肢ラベルからIDへのマップを作成
+    const sourceNodeChoiceLabels = new Map<string, string>();
+    if (node.choices) {
+      for (const choice of node.choices) {
+        sourceNodeChoiceLabels.set(choice.label, choice.id);
+      }
+    }
+
+    // 理論上の全組み合わせを生成
+    const allCombinations = generateCartesianProduct(relatedNodeChoices);
+
+    // 各エッジがカバーする組み合わせを計算
+    const coveredKeys = new Set<string>();
+    for (const edge of outgoingEdges) {
+      const coveredCombinations = getEdgeCoveredCombinations(edge, node.id, relatedNodeChoices, sourceNodeChoiceLabels);
+      for (const combination of coveredCombinations) {
+        coveredKeys.add(combinationToKey(combination));
+      }
+    }
+
+    // 未カバーの組み合わせを検出
+    const uncoveredCombinations: UncoveredCombination[] = [];
+    for (const combination of allCombinations) {
+      const key = combinationToKey(combination);
+      if (!coveredKeys.has(key)) {
+        // 未カバーの組み合わせを詳細情報に変換
+        const conditions: CombinationCondition[] = [];
+        for (const [nodeId, choiceIds] of combination) {
+          const relatedNode = nodeMap.get(nodeId);
+          const labels = choiceIds.map(choiceId => {
+            const choice = relatedNode?.choices?.find(c => c.id === choiceId);
+            return choice?.label || choiceId;
+          });
+          conditions.push({
+            nodeId,
+            nodeLabel: relatedNode?.label || nodeId,
+            choiceIds: [...choiceIds],
+            choiceLabel: labels.join(' + '),
+          });
+        }
+        uncoveredCombinations.push({ conditions });
+      }
+    }
+
+    results.push({
+      nodeId: node.id,
+      hasCompoundConditions: true,
+      relatedNodeIds: Array.from(relatedNodeIds),
+      uncoveredCombinations,
+      isFullyCovered: uncoveredCombinations.length === 0,
+    });
   }
 
   return results;

@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomNode, QuestionCategory } from '@/types/flowchart';
-import { CoverageResult, EdgeConflict } from '@/domain/coverage';
+import { CoverageResult, EdgeConflict, CompoundCoverageResult } from '@/domain/coverage';
 import { rangeToString } from '@/domain/numericRange';
 
 // 設問カテゴリ
@@ -17,6 +17,7 @@ interface NodeListProps {
   nodes: CustomNode[];
   coverageMap: Map<string, CoverageResult>;
   conflictMap: Map<string, EdgeConflict[]>;
+  compoundCoverageMap: Map<string, CompoundCoverageResult>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
@@ -31,6 +32,7 @@ export default function NodeList({
   nodes,
   coverageMap,
   conflictMap,
+  compoundCoverageMap,
   editingChoicesIndex,
   onAddNode,
   onUpdateNode,
@@ -55,11 +57,13 @@ export default function NodeList({
         {nodes.map((node, index) => {
           const coverage = coverageMap.get(node.id);
           const conflicts = conflictMap.get(node.id) || [];
+          const compoundCoverage = compoundCoverageMap.get(node.id);
           const hasWarning = coverage && !coverage.isCovered;
+          const hasCompoundWarning = compoundCoverage && !compoundCoverage.isFullyCovered;
           const hasConflict = conflicts.length > 0;
           return (
             <div key={node.id} className={`p-3 rounded-lg border ${
-              hasConflict ? 'bg-red-50 border-red-300' : hasWarning ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
+              hasConflict ? 'bg-red-50 border-red-300' : (hasWarning || hasCompoundWarning) ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
             }`}>
               {/* 基本情報行 */}
               <div className="flex gap-2 items-center">
@@ -181,6 +185,32 @@ export default function NodeList({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* 複合条件の組み合わせ未網羅警告 */}
+              {compoundCoverage && !compoundCoverage.isFullyCovered && (
+                <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-xs">
+                  <div className="flex items-center gap-1 text-amber-800 font-medium">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    未網羅の条件組み合わせがあります
+                  </div>
+                  <div className="mt-1 text-amber-700">
+                    <ul className="list-disc list-inside ml-2">
+                      {compoundCoverage.uncoveredCombinations.map((combo, comboIndex) => (
+                        <li key={comboIndex}>
+                          {combo.conditions.map((c, i) => (
+                            <span key={c.nodeId}>
+                              {i > 0 && ' AND '}
+                              {c.nodeLabel}: {c.choiceLabel}
+                            </span>
+                          ))}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
 

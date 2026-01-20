@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { CustomNode, CustomEdge } from '@/types/flowchart';
-import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict } from '@/domain/coverage';
+import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict, checkCompoundConditionCoverage, CompoundCoverageResult } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
 
 /**
@@ -44,6 +44,20 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     }
     return map;
   }, [conflictResults]);
+
+  // 複合条件の組み合わせ網羅性チェック結果
+  const compoundCoverageResults = useMemo(() => {
+    return checkCompoundConditionCoverage(nodes, edges);
+  }, [nodes, edges]);
+
+  // ノードIDから複合条件網羅性チェック結果を取得するマップ
+  const compoundCoverageMap = useMemo(() => {
+    const map = new Map<string, CompoundCoverageResult>();
+    for (const result of compoundCoverageResults) {
+      map.set(result.nodeId, result);
+    }
+    return map;
+  }, [compoundCoverageResults]);
 
   // ========== ノード操作 ==========
 
@@ -140,6 +154,8 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     coverageMap,
     conflictResults,
     conflictMap,
+    compoundCoverageResults,
+    compoundCoverageMap,
     // Node actions
     addNode,
     updateNode,

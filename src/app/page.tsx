@@ -77,12 +77,12 @@ const initialEdges: CustomEdge[] = [
   {
     from: NODE_ID_2,
     to: NODE_ID_4,
-    label: "Node 2: Yes AND Node 1: 選択肢3, 選択肢2",
+    label: "Node 2: Yes AND Node 1: 選択肢2",
     style: "solid",
     compoundCondition: {
       conditions: [
         { nodeId: NODE_ID_2, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_2_YES] } },
-        { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT3, CHOICE_1_OPT2] } },
+        { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT2] } },
       ],
       operator: "AND",
     },
@@ -102,6 +102,8 @@ export default function Home() {
     coverageResults,
     coverageMap,
     conflictMap,
+    compoundCoverageMap,
+    compoundCoverageResults,
     addNode: handleAddNode,
     updateNode: handleUpdateNodeDirect,
     removeNode: handleRemoveNode,
@@ -328,6 +330,7 @@ export default function Home() {
           nodes={customNodes}
           coverageMap={coverageMap}
           conflictMap={conflictMap}
+          compoundCoverageMap={compoundCoverageMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={handleAddNode}
           onUpdateNode={handleUpdateNodeDirect}
@@ -352,7 +355,10 @@ export default function Home() {
               mermaidCode={mermaidCode}
               onNodeClick={handleNodeClick}
               onEdgeClick={handleEdgeClick}
-              uncoveredNodeIds={coverageResults.filter(r => !r.isCovered).map(r => r.nodeId)}
+              uncoveredNodeIds={[
+                ...coverageResults.filter(r => !r.isCovered).map(r => r.nodeId),
+                ...compoundCoverageResults.filter(r => !r.isFullyCovered).map(r => r.nodeId),
+              ].filter((id, index, self) => self.indexOf(id) === index)}
               conflictingEdges={conflictingEdges}
             />
           </div>
