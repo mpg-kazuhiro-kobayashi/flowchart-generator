@@ -16,81 +16,78 @@ import {
   CustomEdge,
 } from '@/types/flowchart';
 
-// 初期ノードID（固定値 - SSR/CSR で一貫性を保つため）
-// 新規作成時は generateUUID() で動的に生成される
-const NODE_ID_A = 'node_a1b2c3d4e5f6';
-const NODE_ID_B = 'node_b2c3d4e5f6g7';
-const NODE_ID_C = 'node_c3d4e5f6g7h8';
-const NODE_ID_D = 'node_d4e5f6g7h8i9';
-const NODE_ID_E = 'node_e5f6g7h8i9j0';
+// 初期ノードID
+const NODE_ID_1 = 'fewwqigivttlnc3c';
+const NODE_ID_2 = 'y461yijjbnmrzhfd';
+const NODE_ID_3 = 'rgoiwtcxdl994vi0';
+const NODE_ID_4 = 'kcupm6k1vrjh3gvf';
+const NODE_ID_5 = 'sq98x9qcj7fl3aft';
 
-// 選択肢ID（固定値）
-const CHOICE_A_OPT1 = 'choice_a1opt1xxxxx';
-const CHOICE_A_OPT2 = 'choice_a1opt2xxxxx';
-const CHOICE_A_OPT3 = 'choice_a1opt3xxxxx';
-const CHOICE_B_OPT1 = 'choice_b1opt1xxxxx';
-const CHOICE_B_OPT2 = 'choice_b1opt2xxxxx';
+// 選択肢ID
+const CHOICE_1_OPT1 = 'monmvobuochf27jg';
+const CHOICE_1_OPT2 = 'zz4tyzxqdi242pju';
+const CHOICE_1_OPT3 = 'lo8v8ho66yi4j2l7';
+const CHOICE_2_YES = 'oamoe6ag2vv5w4yo';
+const CHOICE_2_NO = 'cn2w5ayuhun804cg';
 
-// 初期ノードデータ（状態ノードなし）
+// 初期ノードデータ
 const initialNodes: CustomNode[] = [
   {
-    id: NODE_ID_A,
-    label: "Node A",
-    shape: "rectangle",
-    questionCategory: "MA",
-    choices: [
-      { id: CHOICE_A_OPT1, label: "選択肢1" },
-      { id: CHOICE_A_OPT2, label: "選択肢2" },
-      { id: CHOICE_A_OPT3, label: "選択肢3" },
-    ],
-  },
-  {
-    id: NODE_ID_B,
-    label: "Node B",
+    id: NODE_ID_1,
+    label: "Node 1",
     shape: "rectangle",
     questionCategory: "SA",
     choices: [
-      { id: CHOICE_B_OPT1, label: "YES" },
-      { id: CHOICE_B_OPT2, label: "NO" },
+      { id: CHOICE_1_OPT1, label: "選択肢1" },
+      { id: CHOICE_1_OPT2, label: "選択肢2" },
+      { id: CHOICE_1_OPT3, label: "選択肢3" },
     ],
   },
-  { id: NODE_ID_C, label: "Node C", shape: "rectangle" },
-  { id: NODE_ID_D, label: "Node D", shape: "rectangle" },
-  { id: NODE_ID_E, label: "Node E", shape: "rectangle" },
+  {
+    id: NODE_ID_2,
+    label: "Node 2",
+    shape: "rectangle",
+    questionCategory: "SA",
+    choices: [
+      { id: CHOICE_2_YES, label: "Yes" },
+      { id: CHOICE_2_NO, label: "No" },
+    ],
+  },
+  { id: NODE_ID_3, label: "Node 3", shape: "rectangle" },
+  { id: NODE_ID_4, label: "Node 4", shape: "rectangle" },
+  { id: NODE_ID_5, label: "Node 5", shape: "rectangle" },
 ];
 
-// 初期エッジデータ（compoundCondition をエッジに直接設定）
-// 競合テスト: Node B -> Node C と Node B -> Node D で Node A: 選択肢1 が重複
+// 初期エッジデータ
 const initialEdges: CustomEdge[] = [
-  { from: NODE_ID_A, to: NODE_ID_B, label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
+  { from: NODE_ID_1, to: NODE_ID_2, label: "選択肢1, 選択肢2", style: "solid" },
   {
-    from: NODE_ID_B,
-    to: NODE_ID_C,
-    label: "Node A: 選択肢1, 選択肢2 AND Node B: YES",
+    from: NODE_ID_2,
+    to: NODE_ID_3,
+    label: "Node 2: Yes AND Node 1: 選択肢1, 選択肢2",
     style: "solid",
     compoundCondition: {
       conditions: [
-        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT1, CHOICE_A_OPT2] } },
-        { nodeId: NODE_ID_B, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_B_OPT1] } },
+        { nodeId: NODE_ID_2, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_2_YES] } },
+        { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT1, CHOICE_1_OPT2] } },
       ],
       operator: "AND",
     },
   },
   {
-    from: NODE_ID_B,
-    to: NODE_ID_D,
-    label: "Node A: 選択肢1 AND Node B: YES",
+    from: NODE_ID_2,
+    to: NODE_ID_4,
+    label: "Node 2: Yes AND Node 1: 選択肢3, 選択肢2",
     style: "solid",
     compoundCondition: {
       conditions: [
-        // 選択肢1 を含めることで競合を発生させる
-        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT1] } },
-        { nodeId: NODE_ID_B, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_B_OPT1] } },
+        { nodeId: NODE_ID_2, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_2_YES] } },
+        { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT3, CHOICE_1_OPT2] } },
       ],
       operator: "AND",
     },
   },
-  { from: NODE_ID_B, to: NODE_ID_E, label: "NO", style: "solid" },
+  { from: NODE_ID_2, to: NODE_ID_5, label: "No", style: "solid" },
 ];
 
 export default function Home() {
