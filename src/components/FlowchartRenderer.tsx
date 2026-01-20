@@ -15,6 +15,16 @@ export interface EdgeClickInfo {
   toNodeId?: string;
 }
 
+/** 競合エッジの識別情報 */
+export interface ConflictingEdgeInfo {
+  /** エッジのラベル */
+  label: string;
+  /** 接続元ノードID */
+  fromNodeId: string;
+  /** 接続先ノードID */
+  toNodeId: string;
+}
+
 interface FlowchartRendererProps {
   mermaidCode: string;
   onNodeClick?: (nodeId: string) => void;
@@ -22,9 +32,11 @@ interface FlowchartRendererProps {
   onEdgeClick?: (edgeInfo: EdgeClickInfo) => void;
   /** 未網羅のノードID配列 */
   uncoveredNodeIds?: string[];
+  /** 競合しているエッジの情報 */
+  conflictingEdges?: ConflictingEdgeInfo[];
 }
 
-export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClick, uncoveredNodeIds = [] }: FlowchartRendererProps) {
+export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClick, uncoveredNodeIds = [], conflictingEdges = [] }: FlowchartRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +60,30 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
     return match ? match[1] : null;
   }, []);
 
+  // エッジIDからfrom/toノードIDを抽出
+  const extractEdgeNodeIds = useCallback((edgeElement: Element): { from?: string; to?: string } => {
+    // MermaidのエッジIDは形式: L-A-B-0 (A→Bのエッジ)
+    // ノードIDに_が含まれる場合もある: L-B-_state_xxx-0
+    const id = edgeElement.id || '';
+
+    // 形式: L-{from}-{to}-{数字} の最後の数字部分を除去
+    const withoutIndex = id.replace(/-\d+$/, '');
+
+    // L- プレフィックスを除去
+    const withoutPrefix = withoutIndex.replace(/^L-/, '');
+
+    // 残りの部分を最初の - で分割（ただし、_state_ で始まるノードIDに注意）
+    // 戦略: ノードIDに - が含まれないと仮定して、最初の - で分割
+    const parts = withoutPrefix.split('-');
+    if (parts.length >= 2) {
+      // 最初の部分がfrom、残りがto
+      const from = parts[0];
+      const to = parts.slice(1).join('-');
+      return { from, to };
+    }
+    return {};
+  }, []);
+
   // 未網羅ノードにスタイルを適用
   const applyUncoveredStyles = useCallback(() => {
     if (!containerRef.current) return;
@@ -64,6 +100,41 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
       }
     });
   }, [uncoveredNodeIds, extractNodeId]);
+
+  // 競合エッジにスタイルを適用
+  const applyConflictingEdgeStyles = useCallback(() => {
+    if (!containerRef.current) return;
+
+    // Mermaid v10+ では edgePaths グループ内に path 要素が直接ある
+    const edgePathsGroup = containerRef.current.querySelector('g.edgePaths');
+    const edgePaths = edgePathsGroup ? edgePathsGroup.querySelectorAll('path.flowchart-link') : [];
+
+    // edgeLabels グループの直接の子要素を取得（各エッジに1つずつ）
+    const edgeLabelsGroup = containerRef.current.querySelector('g.edgeLabels');
+    const edgeLabelGroups = edgeLabelsGroup ? Array.from(edgeLabelsGroup.children) : [];
+
+    // 競合エッジのラベルセットを作成
+    const conflictingLabels = new Set(conflictingEdges.map(ce => ce.label));
+
+    // パスとラベルグループは同じインデックスで対応
+    edgePaths.forEach((pathElement, index) => {
+      const svgPath = pathElement as SVGPathElement;
+      const labelGroup = edgeLabelGroups[index] as HTMLElement | undefined;
+      const label = labelGroup?.textContent?.trim() || '';
+
+      const isConflicting = label && conflictingLabels.has(label);
+
+      if (isConflicting) {
+        // 競合エッジの線を赤色にする
+        svgPath.style.stroke = '#dc2626';
+        svgPath.style.strokeWidth = '3px';
+      } else {
+        // スタイルをリセット
+        svgPath.style.stroke = '';
+        svgPath.style.strokeWidth = '';
+      }
+    });
+  }, [conflictingEdges]);
 
   const addClickEventListeners = useCallback(() => {
     if (!containerRef.current || !onNodeClick) return;
@@ -101,30 +172,6 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
       node.addEventListener('click', handleClick);
     });
   }, [onNodeClick, extractNodeId]);
-
-  // エッジIDからfrom/toノードIDを抽出
-  const extractEdgeNodeIds = useCallback((edgeElement: Element): { from?: string; to?: string } => {
-    // MermaidのエッジIDは形式: L-A-B-0 (A→Bのエッジ)
-    // ノードIDに_が含まれる場合もある: L-B-_state_xxx-0
-    const id = edgeElement.id || '';
-
-    // 形式: L-{from}-{to}-{数字} の最後の数字部分を除去
-    const withoutIndex = id.replace(/-\d+$/, '');
-
-    // L- プレフィックスを除去
-    const withoutPrefix = withoutIndex.replace(/^L-/, '');
-
-    // 残りの部分を最初の - で分割（ただし、_state_ で始まるノードIDに注意）
-    // 戦略: ノードIDに - が含まれないと仮定して、最初の - で分割
-    const parts = withoutPrefix.split('-');
-    if (parts.length >= 2) {
-      // 最初の部分がfrom、残りがto
-      const from = parts[0];
-      const to = parts.slice(1).join('-');
-      return { from, to };
-    }
-    return {};
-  }, []);
 
   // エッジクリックイベントリスナーを追加
   const addEdgeClickEventListeners = useCallback(() => {
@@ -203,6 +250,9 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
 
           // 未網羅ノードにスタイルを適用
           applyUncoveredStyles();
+
+          // 競合エッジにスタイルを適用
+          applyConflictingEdgeStyles();
         }
       } catch (error) {
         console.error('Mermaid rendering error:', error);
@@ -213,12 +263,17 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
     };
 
     renderMermaid();
-  }, [mermaidCode, addClickEventListeners, addEdgeClickEventListeners, applyUncoveredStyles]);
+  }, [mermaidCode, addClickEventListeners, addEdgeClickEventListeners, applyUncoveredStyles, applyConflictingEdgeStyles]);
 
   // uncoveredNodeIds が変更されたときにスタイルを再適用
   useEffect(() => {
     applyUncoveredStyles();
   }, [uncoveredNodeIds, applyUncoveredStyles]);
+
+  // conflictingEdges が変更されたときにスタイルを再適用
+  useEffect(() => {
+    applyConflictingEdgeStyles();
+  }, [conflictingEdges, applyConflictingEdgeStyles]);
 
   return (
     <div className="w-full h-full relative">
@@ -316,6 +371,36 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
 
         .edgeLabel foreignObject div {
           pointer-events: all !important;
+        }
+
+        /* 競合エッジのスタイル */
+        .edgePath.conflicting path {
+          stroke: #dc2626 !important;
+          stroke-width: 3px !important;
+        }
+
+        .edgePath.conflicting marker path {
+          fill: #dc2626 !important;
+          stroke: #dc2626 !important;
+        }
+
+        .edgePath.conflicting {
+          filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.5)) !important;
+        }
+
+        .edgeLabel.conflicting {
+          background-color: #fef2f2 !important;
+          border: 2px solid #dc2626 !important;
+          border-radius: 4px !important;
+        }
+
+        .edgeLabel.conflicting foreignObject div {
+          color: #dc2626 !important;
+          font-weight: 600 !important;
+        }
+
+        .edgeLabel.conflicting .edgeLabel {
+          background-color: #fef2f2 !important;
         }
       `}</style>
     </div>

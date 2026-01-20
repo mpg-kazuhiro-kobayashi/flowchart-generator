@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomNode, QuestionCategory } from '@/types/flowchart';
-import { CoverageResult } from '@/domain/coverage';
+import { CoverageResult, EdgeConflict } from '@/domain/coverage';
 import { rangeToString } from '@/domain/numericRange';
 
 // 設問カテゴリ
@@ -16,6 +16,7 @@ const questionCategories: { value: QuestionCategory | ''; label: string; descrip
 interface NodeListProps {
   nodes: CustomNode[];
   coverageMap: Map<string, CoverageResult>;
+  conflictMap: Map<string, EdgeConflict[]>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
@@ -29,6 +30,7 @@ interface NodeListProps {
 export default function NodeList({
   nodes,
   coverageMap,
+  conflictMap,
   editingChoicesIndex,
   onAddNode,
   onUpdateNode,
@@ -52,10 +54,12 @@ export default function NodeList({
       <div className="space-y-3">
         {nodes.map((node, index) => {
           const coverage = coverageMap.get(node.id);
+          const conflicts = conflictMap.get(node.id) || [];
           const hasWarning = coverage && !coverage.isCovered;
+          const hasConflict = conflicts.length > 0;
           return (
             <div key={node.id} className={`p-3 rounded-lg border ${
-              hasWarning ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
+              hasConflict ? 'bg-red-50 border-red-300' : hasWarning ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
             }`}>
               {/* 基本情報行 */}
               <div className="flex gap-2 items-center">
@@ -155,6 +159,28 @@ export default function NodeList({
                       </ul>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* エッジ条件競合警告 */}
+              {conflicts.length > 0 && (
+                <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-xs">
+                  <div className="flex items-center gap-1 text-red-800 font-medium">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    エッジ条件が競合しています
+                  </div>
+                  <ul className="mt-1 text-red-700 space-y-0.5">
+                    {conflicts.map((conflict, conflictIndex) => (
+                      <li key={conflictIndex}>
+                        <span className="font-medium">
+                          {conflict.type === 'exact' ? '完全一致' : conflict.type === 'partial' ? '部分重複' : '包含関係'}:
+                        </span>{' '}
+                        {conflict.description}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

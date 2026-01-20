@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
+import { EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
 
 // 数値演算子のオプション
@@ -71,6 +72,8 @@ interface NodeEditDialogProps {
   onDeleteNode?: (nodeId: string) => void;
   /** 網羅性チェック結果 */
   coverageInfo?: CoverageInfo;
+  /** エッジ条件競合情報 */
+  edgeConflicts?: EdgeConflict[];
 }
 
 type TabType = 'settings' | 'connection';
@@ -85,6 +88,7 @@ export default function NodeEditDialog({
   onUpdateNode,
   onDeleteNode,
   coverageInfo,
+  edgeConflicts = [],
 }: NodeEditDialogProps) {
   // タブ状態
   const [activeTab, setActiveTab] = useState<TabType>('settings');
@@ -343,6 +347,32 @@ export default function NodeEditDialog({
                     </ul>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* エッジ条件競合警告 */}
+        {edgeConflicts.length > 0 && (
+          <div className="px-4 py-3 bg-red-50 border-b border-red-200">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm">
+                <p className="font-medium text-red-800">
+                  エッジ条件が競合しています
+                </p>
+                <ul className="text-red-700 mt-1 space-y-1">
+                  {edgeConflicts.map((conflict, index) => (
+                    <li key={index} className="text-xs">
+                      <span className="font-medium">
+                        {conflict.type === 'exact' ? '完全一致' : conflict.type === 'partial' ? '部分重複' : '包含関係'}:
+                      </span>{' '}
+                      {conflict.description}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>

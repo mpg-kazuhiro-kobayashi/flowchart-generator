@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomNode, CustomEdge, FlowchartDefinition } from '@/types/flowchart';
-import { CoverageResult } from '@/domain/coverage';
+import { CoverageResult, EdgeConflict } from '@/domain/coverage';
 import NodeList from './NodeList';
 import EdgeList from './EdgeList';
 
@@ -9,6 +9,7 @@ interface SidebarProps {
   // ノード関連
   nodes: CustomNode[];
   coverageMap: Map<string, CoverageResult>;
+  conflictMap: Map<string, EdgeConflict[]>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
@@ -30,6 +31,7 @@ interface SidebarProps {
 export default function Sidebar({
   nodes,
   coverageMap,
+  conflictMap,
   editingChoicesIndex,
   onAddNode,
   onUpdateNode,
@@ -59,6 +61,7 @@ export default function Sidebar({
         <NodeList
           nodes={nodes}
           coverageMap={coverageMap}
+          conflictMap={conflictMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={onAddNode}
           onUpdateNode={onUpdateNode}

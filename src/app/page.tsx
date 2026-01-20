@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
-import FlowchartRenderer, { EdgeClickInfo } from '@/components/FlowchartRenderer';
+import FlowchartRenderer, { EdgeClickInfo, ConflictingEdgeInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { AddConditionResult, NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
 import EdgeEditDialog, { EdgeUpdateResult } from '@/components/EdgeEditDialog';
 import Sidebar from '@/components/Sidebar';
@@ -60,6 +60,7 @@ const initialNodes: CustomNode[] = [
 ];
 
 // 初期エッジデータ（compoundCondition をエッジに直接設定）
+// 競合テスト: Node B -> Node C と Node B -> Node D で Node A: 選択肢1 が重複
 const initialEdges: CustomEdge[] = [
   { from: NODE_ID_A, to: NODE_ID_B, label: "選択肢1, 選択肢2, 選択肢3", style: "solid" },
   {
@@ -78,11 +79,12 @@ const initialEdges: CustomEdge[] = [
   {
     from: NODE_ID_B,
     to: NODE_ID_D,
-    label: "Node A: 選択肢3 AND Node B: YES",
+    label: "Node A: 選択肢1 AND Node B: YES",
     style: "solid",
     compoundCondition: {
       conditions: [
-        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT3] } },
+        // 選択肢1 を含めることで競合を発生させる
+        { nodeId: NODE_ID_A, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_A_OPT1] } },
         { nodeId: NODE_ID_B, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_B_OPT1] } },
       ],
       operator: "AND",
@@ -102,6 +104,7 @@ export default function Home() {
     editingChoicesIndex,
     coverageResults,
     coverageMap,
+    conflictMap,
     addNode: handleAddNode,
     updateNode: handleUpdateNodeDirect,
     removeNode: handleRemoveNode,
@@ -150,6 +153,33 @@ export default function Home() {
   const mermaidCode = useMemo(() => {
     return FlowchartGenerator.generate(currentDefinition);
   }, [currentDefinition]);
+
+  // 競合エッジ情報を生成
+  const conflictingEdges = useMemo((): ConflictingEdgeInfo[] => {
+    const edges: ConflictingEdgeInfo[] = [];
+    for (const [nodeId, conflicts] of conflictMap) {
+      for (const conflict of conflicts) {
+        // 競合しているエッジを両方追加
+        edges.push({
+          label: conflict.edge1.label,
+          fromNodeId: nodeId,
+          toNodeId: conflict.edge1.to,
+        });
+        edges.push({
+          label: conflict.edge2.label,
+          fromNodeId: nodeId,
+          toNodeId: conflict.edge2.to,
+        });
+      }
+    }
+    // 重複を除去
+    const uniqueEdges = edges.filter((edge, index, self) =>
+      index === self.findIndex(e =>
+        e.label === edge.label && e.fromNodeId === edge.fromNodeId && e.toNodeId === edge.toNodeId
+      )
+    );
+    return uniqueEdges;
+  }, [conflictMap]);
 
   // ========== イベントハンドラ ==========
 
@@ -300,6 +330,7 @@ export default function Home() {
         <Sidebar
           nodes={customNodes}
           coverageMap={coverageMap}
+          conflictMap={conflictMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={handleAddNode}
           onUpdateNode={handleUpdateNodeDirect}
@@ -325,6 +356,7 @@ export default function Home() {
               onNodeClick={handleNodeClick}
               onEdgeClick={handleEdgeClick}
               uncoveredNodeIds={coverageResults.filter(r => !r.isCovered).map(r => r.nodeId)}
+              conflictingEdges={conflictingEdges}
             />
           </div>
         </div>
@@ -356,6 +388,7 @@ export default function Home() {
             numericGaps: coverage.numericGaps,
           } as CoverageInfo;
         })() : undefined}
+        edgeConflicts={selectedSourceNode ? conflictMap.get(selectedSourceNode.id) : undefined}
       />
 
       {/* エッジ編集ダイアログ */}

@@ -85,6 +85,42 @@ function sortRangesByMin(ranges: NumericRange[]): NumericRange[] {
 }
 
 /**
+ * 2つの範囲が重複しているかチェック（公開関数）
+ */
+export function rangesOverlap(a: NumericRange, b: NumericRange): boolean {
+  // aの上限がbの下限より小さい場合、重複なし
+  if (a.max !== null && b.min !== null) {
+    if (a.max < b.min) return false;
+    if (a.max === b.min && !(a.maxInclusive && b.minInclusive)) return false;
+  }
+  // aの下限がbの上限より大きい場合、重複なし
+  if (a.min !== null && b.max !== null) {
+    if (a.min > b.max) return false;
+    if (a.min === b.max && !(a.minInclusive && b.maxInclusive)) return false;
+  }
+  return true;
+}
+
+/**
+ * 範囲aが範囲bに包含されているかチェック（a ⊆ b）
+ */
+export function rangeContainedIn(a: NumericRange, b: NumericRange): boolean {
+  // aの下限がbの下限以上であること
+  if (b.min !== null) {
+    if (a.min === null) return false; // aは負の無限大から始まるが、bは有限
+    if (a.min < b.min) return false;
+    if (a.min === b.min && !b.minInclusive && a.minInclusive) return false;
+  }
+  // aの上限がbの上限以下であること
+  if (b.max !== null) {
+    if (a.max === null) return false; // aは正の無限大まで伸びるが、bは有限
+    if (a.max > b.max) return false;
+    if (a.max === b.max && !b.maxInclusive && a.maxInclusive) return false;
+  }
+  return true;
+}
+
+/**
  * 2つの範囲が重複または隣接しているかチェック
  */
 function rangesOverlapOrAdjacent(a: NumericRange, b: NumericRange): boolean {

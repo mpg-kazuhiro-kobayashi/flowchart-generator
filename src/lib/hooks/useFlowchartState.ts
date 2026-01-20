@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { CustomNode, CustomEdge } from '@/types/flowchart';
-import { checkChoiceCoverage, CoverageResult } from '@/domain/coverage';
+import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
 
 /**
@@ -30,6 +30,20 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     }
     return map;
   }, [coverageResults]);
+
+  // エッジ条件の競合チェック結果
+  const conflictResults = useMemo(() => {
+    return checkEdgeConditionConflicts(nodes, edges);
+  }, [nodes, edges]);
+
+  // ノードIDから競合チェック結果を取得するマップ
+  const conflictMap = useMemo(() => {
+    const map = new Map<string, EdgeConflict[]>();
+    for (const result of conflictResults) {
+      map.set(result.nodeId, result.conflicts);
+    }
+    return map;
+  }, [conflictResults]);
 
   // ========== ノード操作 ==========
 
@@ -124,6 +138,8 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     // Derived data
     coverageResults,
     coverageMap,
+    conflictResults,
+    conflictMap,
     // Node actions
     addNode,
     updateNode,
