@@ -139,12 +139,7 @@ export default function Home() {
     return {
       direction: 'TD' as const,
       nodes: customNodes,
-      edges: customEdges.map(e => ({
-        from: e.from,
-        to: e.to,
-        label: e.label || undefined,
-        style: e.style,
-      })),
+      edges: customEdges,
     };
   }, [customNodes, customEdges]);
 
