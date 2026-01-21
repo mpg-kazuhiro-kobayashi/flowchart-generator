@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, EdgeStyle, NumericOperator, EdgeCondition, CompoundCondition, SingleCondition, ChoiceOption, QuestionCategory } from '@/types/flowchart';
+import { FlowchartNode, EdgeStyle, NumericOperator, ChoiceOption, QuestionCategory, NodeEntryRule, NodeVisibilityCondition, SingleCondition } from '@/types/flowchart';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
 import { EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
@@ -30,19 +30,6 @@ interface ConditionNode extends FlowchartNode {
   choices?: ChoiceOption[];
 }
 
-/** 接続追加の結果 */
-export interface AddConditionResult {
-  targetNodeId: string;
-  label: string;
-  style: EdgeStyle;
-  createNewNode?: {
-    id: string;
-    label: string;
-  };
-  condition?: EdgeCondition;
-  compoundCondition?: CompoundCondition;
-}
-
 /** ノード更新の結果 */
 export interface NodeUpdateResult {
   label: string;
@@ -64,19 +51,22 @@ export interface CoverageInfo {
 interface NodeEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  sourceNode: (FlowchartNode & { questionCategory?: QuestionCategory; choices?: ChoiceOption[] }) | null;
+  sourceNode: (FlowchartNode & { questionCategory?: QuestionCategory; choices?: ChoiceOption[]; entryRules?: NodeEntryRule[] }) | null;
   availableNodes: FlowchartNode[];
   conditionNodes?: ConditionNode[];
-  onAddCondition: (condition: AddConditionResult) => void;
   onUpdateNode: (nodeId: string, update: NodeUpdateResult) => void;
   onDeleteNode?: (nodeId: string) => void;
+  onAddEntryRule?: (nodeId: string, rule: Omit<NodeEntryRule, 'id'>) => void;
+  onUpdateEntryRule?: (nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => void;
+  onRemoveEntryRule?: (nodeId: string, ruleId: string) => void;
   /** 網羅性チェック結果 */
   coverageInfo?: CoverageInfo;
   /** エッジ条件競合情報 */
   edgeConflicts?: EdgeConflict[];
 }
 
-type TabType = 'settings' | 'connection';
+type TabType = 'settings' | 'entryRules';
+type ConditionType = 'always' | 'choice' | 'numeric' | 'compound' | 'default';
 
 export default function NodeEditDialog({
   isOpen,
@@ -84,9 +74,11 @@ export default function NodeEditDialog({
   sourceNode,
   availableNodes,
   conditionNodes = [],
-  onAddCondition,
   onUpdateNode,
   onDeleteNode,
+  onAddEntryRule,
+  onUpdateEntryRule: _onUpdateEntryRule,
+  onRemoveEntryRule,
   coverageInfo,
   edgeConflicts = [],
 }: NodeEditDialogProps) {
@@ -98,20 +90,28 @@ export default function NodeEditDialog({
   const [nodeQuestionCategory, setNodeQuestionCategory] = useState<QuestionCategory | ''>('');
   const [nodeChoices, setNodeChoices] = useState<ChoiceOption[]>([]);
 
-  // 接続追加用の状態
-  const [targetType, setTargetType] = useState<'existing' | 'new'>('existing');
-  const [selectedTargetId, setSelectedTargetId] = useState<string>('');
-  const [newNodeLabel, setNewNodeLabel] = useState('');
-  const [conditionLabel, setConditionLabel] = useState('');
+  // 到達ルール追加用の状態
+  const [isAddingRule, setIsAddingRule] = useState(false);
+  const [newRuleSourceNodeId, setNewRuleSourceNodeId] = useState<string>('');
+  const [newRuleConditionType, setNewRuleConditionType] = useState<ConditionType>('always');
+  const [newRuleLabel, setNewRuleLabel] = useState('');
+  const [newRuleStyle, setNewRuleStyle] = useState<EdgeStyle>('solid');
+  const [newRuleSelectedChoiceIds, setNewRuleSelectedChoiceIds] = useState<string[]>([]);
+  const [newRuleNumericOperator, setNewRuleNumericOperator] = useState<NumericOperator>('eq');
+  const [newRuleNumericValue, setNewRuleNumericValue] = useState<string>('');
+  const [newRuleCompoundConditions, setNewRuleCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
 
-  // 分岐条件用の状態
-  const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
-  const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
-  const [numericValue, setNumericValue] = useState<string>('');
-
-  // 複合条件用の状態
-  const [useCompoundCondition, setUseCompoundCondition] = useState(false);
-  const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
+  // 新しいルール状態をリセット
+  const resetNewRuleState = () => {
+    setNewRuleSourceNodeId(availableNodes.length > 0 ? availableNodes[0].id : '');
+    setNewRuleConditionType('always');
+    setNewRuleLabel('');
+    setNewRuleStyle('solid');
+    setNewRuleSelectedChoiceIds([]);
+    setNewRuleNumericOperator('eq');
+    setNewRuleNumericValue('');
+    setNewRuleCompoundConditions(new Map());
+  };
 
   // ダイアログが開いたときに状態をリセット
   useEffect(() => {
@@ -121,45 +121,23 @@ export default function NodeEditDialog({
       setNodeQuestionCategory(sourceNode.questionCategory || '');
       setNodeChoices(sourceNode.choices ? [...sourceNode.choices] : []);
 
-      // 接続追加を初期化
-      setTargetType('existing');
-      setSelectedTargetId(availableNodes.length > 0 ? availableNodes[0].id : '');
-      setNewNodeLabel('');
-      setConditionLabel('');
-      setSelectedChoiceIds([]);
-      setNumericOperator('eq');
-      setNumericValue('');
-      setUseCompoundCondition(false);
-      setCompoundConditions(new Map());
+      // 到達ルール追加をリセット
+      setIsAddingRule(false);
+      resetNewRuleState();
 
       // デフォルトタブ
       setActiveTab('settings');
     }
-  }, [isOpen, sourceNode, availableNodes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, sourceNode]);
 
   // 利用可能なノード（ソースノード自身を除く）
   const selectableNodes = availableNodes.filter(n => n.id !== sourceNode?.id);
 
-  // 現在のノード設定での設問カテゴリ判定
-  const currentQuestionCategory = nodeQuestionCategory as QuestionCategory | undefined;
-  const currentHasChoices = (currentQuestionCategory === 'SA' || currentQuestionCategory === 'MA') && nodeChoices.length > 0;
-  const currentIsNumeric = currentQuestionCategory === 'NA';
-  const currentIsFreeAnswer = currentQuestionCategory === 'FA';
-
-  // 条件ラベルを自動生成
-  const generateConditionLabel = (): string => {
-    if (currentHasChoices && selectedChoiceIds.length > 0) {
-      const selectedLabels = nodeChoices
-        .filter(c => selectedChoiceIds.includes(c.id))
-        .map(c => c.label);
-      return selectedLabels.join(', ');
-    }
-    if (currentIsNumeric && numericValue) {
-      const op = numericOperators.find(o => o.value === numericOperator);
-      return `${op?.symbol || ''} ${numericValue}`;
-    }
-    return conditionLabel;
-  };
+  // 選択されたソースノードの情報
+  const selectedSourceConditionNode = conditionNodes.find(n => n.id === newRuleSourceNodeId);
+  const sourceHasChoices = selectedSourceConditionNode?.choices && selectedSourceConditionNode.choices.length > 0;
+  const sourceIsNumeric = selectedSourceConditionNode?.questionCategory === 'NA';
 
   // 選択肢追加
   const addChoice = () => {
@@ -198,107 +176,139 @@ export default function NodeEditDialog({
     onClose();
   };
 
-  // 接続追加を実行
-  const handleAddConnection = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // 複合条件の場合
-    if (useCompoundCondition && compoundConditions.size >= 2) {
-      const conditions = Array.from(compoundConditions.values());
-      const compoundCondition: CompoundCondition = {
-        conditions,
-        operator: 'AND',
-      };
-
-      const newNodeId = generateUUID();
-      const targetNodeId = targetType === 'existing' ? selectedTargetId : newNodeId;
-      const result: AddConditionResult = {
-        targetNodeId,
-        label: conditionLabel,
-        style: 'solid',
-        compoundCondition,
-      };
-
-      if (targetType === 'new' && newNodeLabel) {
-        result.createNewNode = {
-          id: newNodeId,
-          label: newNodeLabel,
-        };
+  // 条件ラベルを自動生成
+  const generateConditionLabel = (): string => {
+    if (newRuleConditionType === 'always') {
+      return '';
+    }
+    if (newRuleConditionType === 'default') {
+      return 'その他';
+    }
+    if (newRuleConditionType === 'choice' && selectedSourceConditionNode?.choices && newRuleSelectedChoiceIds.length > 0) {
+      const selectedLabels = selectedSourceConditionNode.choices
+        .filter(c => newRuleSelectedChoiceIds.includes(c.id))
+        .map(c => c.label);
+      return selectedLabels.join(', ');
+    }
+    if (newRuleConditionType === 'numeric' && newRuleNumericValue) {
+      const op = numericOperators.find(o => o.value === newRuleNumericOperator);
+      return `${op?.symbol || ''} ${newRuleNumericValue}`;
+    }
+    if (newRuleConditionType === 'compound' && newRuleCompoundConditions.size > 0) {
+      const parts: string[] = [];
+      for (const [nodeId, condition] of newRuleCompoundConditions) {
+        const node = conditionNodes.find(n => n.id === nodeId);
+        if (node && condition.choiceCondition) {
+          const choiceLabels = node.choices
+            ?.filter(c => condition.choiceCondition!.choiceIds.includes(c.id))
+            .map(c => c.label) || [];
+          parts.push(`${node.label}: ${choiceLabels.join(', ')}`);
+        } else if (node && condition.numericCondition) {
+          const op = numericOperators.find(o => o.value === condition.numericCondition!.operator);
+          parts.push(`${node.label}: ${op?.symbol || ''} ${condition.numericCondition!.value}`);
+        }
       }
+      return parts.join(' AND ');
+    }
+    return newRuleLabel;
+  };
 
-      onAddCondition(result);
-      onClose();
-      return;
+  // 到達ルール追加を実行
+  const handleAddEntryRule = () => {
+    if (!sourceNode || !onAddEntryRule || !newRuleSourceNodeId) return;
+
+    let visibilityCondition: NodeVisibilityCondition | undefined;
+
+    switch (newRuleConditionType) {
+      case 'always':
+        visibilityCondition = { type: 'always' };
+        break;
+      case 'default':
+        visibilityCondition = { type: 'default' };
+        break;
+      case 'choice':
+        if (newRuleSelectedChoiceIds.length > 0) {
+          visibilityCondition = { type: 'choice', choiceIds: newRuleSelectedChoiceIds };
+        }
+        break;
+      case 'numeric':
+        if (newRuleNumericValue) {
+          visibilityCondition = {
+            type: 'numeric',
+            numeric: {
+              operator: newRuleNumericOperator,
+              value: parseFloat(newRuleNumericValue),
+            },
+          };
+        }
+        break;
+      case 'compound':
+        if (newRuleCompoundConditions.size >= 1) {
+          const conditions = Array.from(newRuleCompoundConditions.values());
+          visibilityCondition = {
+            type: 'compound',
+            compound: {
+              conditions,
+              operator: 'AND',
+            },
+          };
+        }
+        break;
     }
 
-    // 単一条件の場合
-    let condition: EdgeCondition | undefined;
-    if (currentHasChoices && selectedChoiceIds.length > 0) {
-      condition = { choiceIds: selectedChoiceIds };
-    } else if (currentIsNumeric && numericValue) {
-      condition = {
-        numericCondition: {
-          operator: numericOperator,
-          value: parseFloat(numericValue),
-        },
-      };
+    const finalLabel = newRuleLabel || generateConditionLabel();
+
+    const newRule: Omit<NodeEntryRule, 'id'> = {
+      sourceNodeId: newRuleSourceNodeId,
+      label: finalLabel,
+      style: newRuleStyle,
+      visibilityCondition,
+    };
+
+    onAddEntryRule(sourceNode.id, newRule);
+    setIsAddingRule(false);
+    resetNewRuleState();
+  };
+
+  // 到達ルール削除
+  const handleRemoveEntryRule = (ruleId: string) => {
+    if (!sourceNode || !onRemoveEntryRule) return;
+    if (confirm('この到達ルールを削除しますか？')) {
+      onRemoveEntryRule(sourceNode.id, ruleId);
     }
-
-    const finalLabel = generateConditionLabel();
-
-    if (targetType === 'existing' && selectedTargetId) {
-      onAddCondition({
-        targetNodeId: selectedTargetId,
-        label: finalLabel,
-        style: 'solid',
-        condition,
-      });
-    } else if (targetType === 'new' && newNodeLabel) {
-      const newNodeId = generateUUID();
-      onAddCondition({
-        targetNodeId: newNodeId,
-        label: finalLabel,
-        style: 'solid',
-        createNewNode: {
-          id: newNodeId,
-          label: newNodeLabel,
-        },
-        condition,
-      });
-    }
-
-    onClose();
   };
 
   // 複合条件を更新するヘルパー関数
   const updateCompoundCondition = (nodeId: string, condition: SingleCondition | null) => {
-    const newConditions = new Map(compoundConditions);
+    const newConditions = new Map(newRuleCompoundConditions);
     if (condition) {
       newConditions.set(nodeId, condition);
     } else {
       newConditions.delete(nodeId);
     }
-    setCompoundConditions(newConditions);
+    setNewRuleCompoundConditions(newConditions);
   };
 
   // バリデーション
-  const isTargetValid = targetType === 'existing'
-    ? !!selectedTargetId
-    : !!newNodeLabel.trim();
-
-  const isConditionValid = (() => {
-    if (useCompoundCondition) {
-      return compoundConditions.size >= 2;
+  const isNewRuleValid = (() => {
+    if (!newRuleSourceNodeId) return false;
+    switch (newRuleConditionType) {
+      case 'always':
+      case 'default':
+        return true;
+      case 'choice':
+        return newRuleSelectedChoiceIds.length > 0;
+      case 'numeric':
+        return newRuleNumericValue !== '';
+      case 'compound':
+        return newRuleCompoundConditions.size >= 1;
+      default:
+        return false;
     }
-    if (!currentQuestionCategory) return true;
-    if (currentIsFreeAnswer) return false;
-    if (currentHasChoices) return selectedChoiceIds.length > 0;
-    if (currentIsNumeric) return numericValue !== '';
-    return true;
   })();
 
-  const isConnectionValid = isTargetValid && isConditionValid;
   const isSettingsValid = nodeLabel.trim() !== '';
+  const isRootNode = !sourceNode?.entryRules || sourceNode.entryRules.length === 0;
 
   if (!isOpen || !sourceNode) return null;
 
@@ -314,6 +324,7 @@ export default function NodeEditDialog({
           <h2 className="text-xl font-bold text-white">ノード設定</h2>
           <p className="text-blue-100 text-sm mt-1">
             「{sourceNode.label}」({sourceNode.id})
+            {isRootNode && <span className="ml-2 px-2 py-0.5 bg-blue-400 rounded text-xs">ルートノード</span>}
           </p>
         </div>
 
@@ -393,14 +404,19 @@ export default function NodeEditDialog({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('connection')}
+            onClick={() => setActiveTab('entryRules')}
             className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-              activeTab === 'connection'
+              activeTab === 'entryRules'
                 ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            接続追加
+            到達ルール
+            {sourceNode.entryRules && sourceNode.entryRules.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+                {sourceNode.entryRules.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -445,7 +461,6 @@ export default function NodeEditDialog({
                         onChange={e => {
                           const value = e.target.value as QuestionCategory | '';
                           setNodeQuestionCategory(value);
-                          // SA/MAに変更時、選択肢がなければ初期化
                           if ((value === 'SA' || value === 'MA') && nodeChoices.length === 0) {
                             setNodeChoices([]);
                           }
@@ -525,7 +540,7 @@ export default function NodeEditDialog({
                   <button
                     type="button"
                     onClick={() => {
-                      if (sourceNode && confirm(`ノード「${sourceNode.label}」を削除しますか？\n関連するエッジや状態ノードも削除されます。`)) {
+                      if (sourceNode && confirm(`ノード「${sourceNode.label}」を削除しますか？\n関連する到達ルールも削除されます。`)) {
                         onDeleteNode(sourceNode.id);
                         onClose();
                       }
@@ -542,335 +557,330 @@ export default function NodeEditDialog({
             </div>
           )}
 
-          {/* 接続追加タブ */}
-          {activeTab === 'connection' && (
-            <form onSubmit={handleAddConnection} className="space-y-5">
-              {/* 接続先タイプの選択 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  接続先
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTargetType('existing')}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                      targetType === 'existing'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    既存のノード
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTargetType('new')}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                      targetType === 'new'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    新規ノード作成
-                  </button>
-                </div>
-              </div>
-
-              {/* 既存ノード選択 */}
-              {targetType === 'existing' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    接続先ノードを選択
-                  </label>
-                  {selectableNodes.length > 0 ? (
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {selectableNodes.map(node => (
-                        <label
-                          key={node.id}
-                          className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
-                            selectedTargetId === node.id
-                              ? 'bg-blue-50 border-2 border-blue-500'
-                              : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="targetNode"
-                            value={node.id}
-                            checked={selectedTargetId === node.id}
-                            onChange={e => setSelectedTargetId(e.target.value)}
-                            className="sr-only"
-                          />
-                          <div className="flex-1">
-                            <span className="font-medium text-gray-900 text-sm">{node.label}</span>
-                            <span className="text-gray-500 text-xs ml-2">({node.id})</span>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm p-3 bg-gray-50 rounded-lg">
-                      接続可能なノードがありません。
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* 新規ノード作成 */}
-              {targetType === 'new' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ノードラベル
-                  </label>
-                  <input
-                    type="text"
-                    value={newNodeLabel}
-                    onChange={e => setNewNodeLabel(e.target.value)}
-                    placeholder="例: 新しい処理"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">IDは自動的に生成されます</p>
-                </div>
-              )}
-
-              {/* 複合条件の切り替え */}
-              {conditionNodes.length >= 2 && (
-                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useCompoundCondition}
-                      onChange={e => {
-                        setUseCompoundCondition(e.target.checked);
-                        if (!e.target.checked) {
-                          setCompoundConditions(new Map());
-                        }
-                      }}
-                      className="w-4 h-4 text-purple-600 rounded"
-                    />
-                    <span className="text-sm font-medium text-purple-800">
-                      複合条件を使用
-                    </span>
-                  </label>
-                </div>
-              )}
-
-              {/* 複合条件設定UI */}
-              {useCompoundCondition && (
+          {/* 到達ルールタブ */}
+          {activeTab === 'entryRules' && (
+            <div className="space-y-4">
+              {/* 既存の到達ルール一覧 */}
+              {sourceNode.entryRules && sourceNode.entryRules.length > 0 ? (
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    複合条件設定
+                    現在の到達ルール
                   </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {conditionNodes.map(node => {
-                      const currentCondition = compoundConditions.get(node.id);
-                      const isSelected = !!currentCondition;
-
-                      return (
-                        <div
-                          key={node.id}
-                          className={`p-2 rounded-lg border ${
-                            isSelected ? 'bg-purple-50 border-purple-300' : 'bg-gray-50 border-gray-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-gray-900 text-xs">
-                              {node.label} ({node.questionCategory})
-                            </span>
-                            {isSelected && (
-                              <button
-                                type="button"
-                                onClick={() => updateCompoundCondition(node.id, null)}
-                                className="text-xs text-red-600"
-                              >
-                                クリア
-                              </button>
+                  {sourceNode.entryRules.map(rule => {
+                    const sourceNodeInfo = availableNodes.find(n => n.id === rule.sourceNodeId);
+                    return (
+                      <div key={rule.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">
+                              {sourceNodeInfo?.label || rule.sourceNodeId} →
+                            </div>
+                            {rule.label && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                ラベル: {rule.label}
+                              </div>
                             )}
+                            <div className="text-xs text-gray-500 mt-1">
+                              条件: {rule.visibilityCondition?.type || 'なし'}
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEntryRule(rule.id)}
+                            className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                  <p className="text-sm text-blue-800">
+                    到達ルールがありません。このノードはルートノードとして扱われます。
+                  </p>
+                </div>
+              )}
 
-                          {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
-                            <div className="flex flex-wrap gap-1">
-                              {node.choices.map(choice => {
-                                const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
-                                return (
+              {/* 到達ルール追加フォーム */}
+              {isAddingRule ? (
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-green-800">新しい到達ルールを追加</h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingRule(false);
+                        resetNewRuleState();
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* ソースノード選択 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      接続元ノード
+                    </label>
+                    <select
+                      value={newRuleSourceNodeId}
+                      onChange={e => {
+                        setNewRuleSourceNodeId(e.target.value);
+                        setNewRuleSelectedChoiceIds([]);
+                        setNewRuleNumericValue('');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                    >
+                      {selectableNodes.map(node => (
+                        <option key={node.id} value={node.id}>
+                          {node.label} ({node.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 条件タイプ選択 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      条件タイプ
+                    </label>
+                    <select
+                      value={newRuleConditionType}
+                      onChange={e => setNewRuleConditionType(e.target.value as ConditionType)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                    >
+                      <option value="always">無条件</option>
+                      {sourceHasChoices && <option value="choice">選択肢条件</option>}
+                      {sourceIsNumeric && <option value="numeric">数値条件</option>}
+                      {conditionNodes.length >= 1 && <option value="compound">複合条件</option>}
+                      <option value="default">デフォルト（その他）</option>
+                    </select>
+                  </div>
+
+                  {/* 選択肢条件 */}
+                  {newRuleConditionType === 'choice' && selectedSourceConditionNode?.choices && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        選択肢（複数選択可）
+                      </label>
+                      <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg border border-gray-200">
+                        {selectedSourceConditionNode.choices.map(choice => (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            onClick={() => {
+                              if (newRuleSelectedChoiceIds.includes(choice.id)) {
+                                setNewRuleSelectedChoiceIds(newRuleSelectedChoiceIds.filter(id => id !== choice.id));
+                              } else {
+                                setNewRuleSelectedChoiceIds([...newRuleSelectedChoiceIds, choice.id]);
+                              }
+                            }}
+                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                              newRuleSelectedChoiceIds.includes(choice.id)
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 数値条件 */}
+                  {newRuleConditionType === 'numeric' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        数値条件
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <select
+                          value={newRuleNumericOperator}
+                          onChange={e => setNewRuleNumericOperator(e.target.value as NumericOperator)}
+                          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                        >
+                          {numericOperators.map(op => (
+                            <option key={op.value} value={op.value}>
+                              {op.label} ({op.symbol})
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={newRuleNumericValue}
+                          onChange={e => setNewRuleNumericValue(e.target.value)}
+                          placeholder="値を入力"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 複合条件 */}
+                  {newRuleConditionType === 'compound' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        複合条件設定（AND条件）
+                      </label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {conditionNodes.map(node => {
+                          const currentCondition = newRuleCompoundConditions.get(node.id);
+                          const isSelected = !!currentCondition;
+
+                          return (
+                            <div
+                              key={node.id}
+                              className={`p-2 rounded-lg border ${
+                                isSelected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-gray-900 text-xs">
+                                  {node.label} ({node.questionCategory})
+                                </span>
+                                {isSelected && (
                                   <button
-                                    key={choice.id}
                                     type="button"
-                                    onClick={() => {
-                                      const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                                      const newChoices = isChoiceSelected
-                                        ? currentChoices.filter(id => id !== choice.id)
-                                        : [...currentChoices, choice.id];
-                                      if (newChoices.length > 0) {
+                                    onClick={() => updateCompoundCondition(node.id, null)}
+                                    className="text-xs text-red-600"
+                                  >
+                                    クリア
+                                  </button>
+                                )}
+                              </div>
+
+                              {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
+                                <div className="flex flex-wrap gap-1">
+                                  {node.choices.map(choice => {
+                                    const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
+                                    return (
+                                      <button
+                                        key={choice.id}
+                                        type="button"
+                                        onClick={() => {
+                                          const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
+                                          const newChoices = isChoiceSelected
+                                            ? currentChoices.filter(id => id !== choice.id)
+                                            : [...currentChoices, choice.id];
+                                          if (newChoices.length > 0) {
+                                            updateCompoundCondition(node.id, {
+                                              nodeId: node.id,
+                                              conditionType: 'choice',
+                                              choiceCondition: { choiceIds: newChoices },
+                                            });
+                                          } else {
+                                            updateCompoundCondition(node.id, null);
+                                          }
+                                        }}
+                                        className={`px-2 py-0.5 text-xs rounded ${
+                                          isChoiceSelected
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-gray-100 text-gray-700 border border-gray-300'
+                                        }`}
+                                      >
+                                        {choice.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {node.questionCategory === 'NA' && (
+                                <div className="flex gap-1 items-center">
+                                  <select
+                                    value={currentCondition?.numericCondition?.operator || 'eq'}
+                                    onChange={e => {
+                                      const value = currentCondition?.numericCondition?.value;
+                                      if (value !== undefined) {
                                         updateCompoundCondition(node.id, {
                                           nodeId: node.id,
-                                          conditionType: 'choice',
-                                          choiceCondition: { choiceIds: newChoices },
+                                          conditionType: 'numeric',
+                                          numericCondition: {
+                                            operator: e.target.value as NumericOperator,
+                                            value,
+                                          },
+                                        });
+                                      }
+                                    }}
+                                    className="px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
+                                  >
+                                    {numericOperators.map(op => (
+                                      <option key={op.value} value={op.value}>{op.symbol}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="number"
+                                    value={currentCondition?.numericCondition?.value ?? ''}
+                                    onChange={e => {
+                                      const value = e.target.value ? parseFloat(e.target.value) : undefined;
+                                      if (value !== undefined) {
+                                        updateCompoundCondition(node.id, {
+                                          nodeId: node.id,
+                                          conditionType: 'numeric',
+                                          numericCondition: {
+                                            operator: currentCondition?.numericCondition?.operator || 'eq',
+                                            value,
+                                          },
                                         });
                                       } else {
                                         updateCompoundCondition(node.id, null);
                                       }
                                     }}
-                                    className={`px-2 py-0.5 text-xs rounded ${
-                                      isChoiceSelected
-                                        ? 'bg-purple-600 text-white'
-                                        : 'bg-white text-gray-700 border border-gray-300'
-                                    }`}
-                                  >
-                                    {choice.label}
-                                  </button>
-                                );
-                              })}
+                                    placeholder="値"
+                                    className="flex-1 px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-                          {node.questionCategory === 'NA' && (
-                            <div className="flex gap-1 items-center">
-                              <select
-                                value={currentCondition?.numericCondition?.operator || 'eq'}
-                                onChange={e => {
-                                  const value = currentCondition?.numericCondition?.value;
-                                  if (value !== undefined) {
-                                    updateCompoundCondition(node.id, {
-                                      nodeId: node.id,
-                                      conditionType: 'numeric',
-                                      numericCondition: {
-                                        operator: e.target.value as NumericOperator,
-                                        value,
-                                      },
-                                    });
-                                  }
-                                }}
-                                className="px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                              >
-                                {numericOperators.map(op => (
-                                  <option key={op.value} value={op.value}>{op.symbol}</option>
-                                ))}
-                              </select>
-                              <input
-                                type="number"
-                                value={currentCondition?.numericCondition?.value ?? ''}
-                                onChange={e => {
-                                  const value = e.target.value ? parseFloat(e.target.value) : undefined;
-                                  if (value !== undefined) {
-                                    updateCompoundCondition(node.id, {
-                                      nodeId: node.id,
-                                      conditionType: 'numeric',
-                                      numericCondition: {
-                                        operator: currentCondition?.numericCondition?.operator || 'eq',
-                                        value,
-                                      },
-                                    });
-                                  } else {
-                                    updateCompoundCondition(node.id, null);
-                                  }
-                                }}
-                                placeholder="値"
-                                className="flex-1 px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* FA警告 */}
-              {currentIsFreeAnswer && !useCompoundCondition && (
-                <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-xs text-amber-800">
-                    自由入力（FA）は分岐条件を設定できません。
-                  </p>
-                </div>
-              )}
-
-              {/* 選択肢による分岐条件 */}
-              {currentHasChoices && !useCompoundCondition && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    分岐条件（複数選択可）
-                  </label>
-                  <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg">
-                    {nodeChoices.map(choice => (
-                      <button
-                        key={choice.id}
-                        type="button"
-                        onClick={() => {
-                          if (selectedChoiceIds.includes(choice.id)) {
-                            setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
-                          } else {
-                            setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
-                          }
-                        }}
-                        className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                          selectedChoiceIds.includes(choice.id)
-                            ? 'bg-green-500 text-white'
-                            : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                        }`}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 数値条件 */}
-              {currentIsNumeric && !useCompoundCondition && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    分岐条件
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <select
-                      value={numericOperator}
-                      onChange={e => setNumericOperator(e.target.value as NumericOperator)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    >
-                      {numericOperators.map(op => (
-                        <option key={op.value} value={op.value}>
-                          {op.label} ({op.symbol})
-                        </option>
-                      ))}
-                    </select>
+                  {/* ラベル */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ラベル（任意）
+                    </label>
                     <input
-                      type="number"
-                      value={numericValue}
-                      onChange={e => setNumericValue(e.target.value)}
-                      placeholder="値を入力"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      type="text"
+                      value={newRuleLabel}
+                      onChange={e => setNewRuleLabel(e.target.value)}
+                      placeholder={generateConditionLabel() || '自動生成されます'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                     />
                   </div>
-                </div>
-              )}
 
-              {/* 条件ラベル */}
-              {(!currentQuestionCategory || useCompoundCondition) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    条件ラベル（任意）
-                  </label>
-                  <input
-                    type="text"
-                    value={conditionLabel}
-                    onChange={e => setConditionLabel(e.target.value)}
-                    placeholder="例: Yes, No"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                  />
+                  {/* 追加ボタン */}
+                  <button
+                    type="button"
+                    onClick={handleAddEntryRule}
+                    disabled={!isNewRuleValid}
+                    className="w-full py-2.5 px-4 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    到達ルールを追加
+                  </button>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingRule(true)}
+                  disabled={selectableNodes.length === 0}
+                  className="w-full py-2.5 px-4 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  到達ルールを追加
+                </button>
               )}
-
-              {/* 接続追加ボタン */}
-              <button
-                type="submit"
-                disabled={!isConnectionValid}
-                className="w-full py-2.5 px-4 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                接続を追加
-              </button>
-            </form>
+            </div>
           )}
         </div>
 

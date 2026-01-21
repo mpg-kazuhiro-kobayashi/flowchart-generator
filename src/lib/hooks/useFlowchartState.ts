@@ -1,19 +1,33 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { CustomNode, CustomEdge } from '@/types/flowchart';
+import { CustomNode, CustomEdge, NodeEntryRule, NodeVisibilityCondition } from '@/types/flowchart';
 import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict, checkCompoundConditionCoverage, CompoundCoverageResult } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
+import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 
 /**
- * フローチャートのノードとエッジの状態管理フック
+ * フローチャートのノード状態管理フック
+ * edges は entryRules から動的に生成する
  */
-export function useFlowchartState(initialNodes: CustomNode[], initialEdges: CustomEdge[]) {
+export function useFlowchartState(initialNodes: CustomNode[]) {
   const [nodes, setNodes] = useState<CustomNode[]>(initialNodes);
-  const [edges, setEdges] = useState<CustomEdge[]>(initialEdges);
 
   // 選択肢編集中のノードインデックス
   const [editingChoicesIndex, setEditingChoicesIndex] = useState<number | null>(null);
+
+  // ========== エッジの動的生成 ==========
+
+  // entryRules から edges を動的に生成
+  const edges = useMemo((): CustomEdge[] => {
+    const generatedEdges = FlowchartGenerator.generateEdgesFromEntryRules(nodes);
+    return generatedEdges.map(edge => ({
+      from: edge.from,
+      to: edge.to,
+      label: edge.label || '',
+      style: edge.style || 'solid',
+    }));
+  }, [nodes]);
 
   // ========== 派生データ ==========
 
@@ -64,7 +78,7 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
   const addNode = useCallback(() => {
     const newId = generateUUID();
     const nodeNumber = nodes.length + 1;
-    setNodes(prev => [...prev, { id: newId, label: `Node ${nodeNumber}`, shape: 'rectangle' }]);
+    setNodes(prev => [...prev, { id: newId, label: `Node ${nodeNumber}`, shape: 'rectangle', entryRules: [] }]);
   }, [nodes]);
 
   const updateNode = useCallback((index: number, updates: Partial<CustomNode>) => {
@@ -77,8 +91,46 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
 
   const removeNode = useCallback((index: number) => {
     const nodeId = nodes[index].id;
-    setNodes(prev => prev.filter((_, i) => i !== index));
-    setEdges(prev => prev.filter(e => e.from !== nodeId && e.to !== nodeId));
+    setNodes(prev => {
+      // ノードを削除し、他ノードの entryRules から参照を削除
+      return prev
+        .filter((_, i) => i !== index)
+        .map(node => {
+          if (!node.entryRules) return node;
+
+          // sourceNodeId が削除対象のノードを参照している entryRules を削除
+          const filteredRules = node.entryRules.filter(rule => rule.sourceNodeId !== nodeId);
+
+          // 複合条件内で削除対象のノードを参照している条件を削除
+          const cleanedRules = filteredRules.map(rule => {
+            if (rule.visibilityCondition?.type === 'compound') {
+              const filteredConditions = rule.visibilityCondition.compound.conditions.filter(
+                cond => cond.nodeId !== nodeId
+              );
+              // 条件が空になった場合は always に変更
+              if (filteredConditions.length === 0) {
+                return {
+                  ...rule,
+                  visibilityCondition: { type: 'always' } as NodeVisibilityCondition,
+                };
+              }
+              return {
+                ...rule,
+                visibilityCondition: {
+                  type: 'compound',
+                  compound: {
+                    ...rule.visibilityCondition.compound,
+                    conditions: filteredConditions,
+                  },
+                } as NodeVisibilityCondition,
+              };
+            }
+            return rule;
+          });
+
+          return { ...node, entryRules: cleanedRules };
+        });
+    });
   }, [nodes]);
 
   const toggleChoicesEdit = useCallback((index: number) => {
@@ -122,32 +174,49 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     });
   }, []);
 
-  // ========== エッジ操作 ==========
+  // ========== EntryRule 操作 ==========
 
-  const addEdge = useCallback(() => {
-    if (nodes.length >= 2) {
-      setEdges(prev => [...prev, { from: nodes[0].id, to: nodes[1].id, label: '', style: 'solid' }]);
-    }
-  }, [nodes]);
-
-  const updateEdge = useCallback((index: number, updates: Partial<CustomEdge>) => {
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges[index] = { ...newEdges[index], ...updates };
-      return newEdges;
-    });
+  const addEntryRule = useCallback((nodeId: string, rule: Omit<NodeEntryRule, 'id'>) => {
+    setNodes(prev => prev.map(node => {
+      if (node.id !== nodeId) return node;
+      const newRule: NodeEntryRule = {
+        ...rule,
+        id: generateUUID(),
+      };
+      return {
+        ...node,
+        entryRules: [...(node.entryRules || []), newRule],
+      };
+    }));
   }, []);
 
-  const removeEdge = useCallback((index: number) => {
-    setEdges(prev => prev.filter((_, i) => i !== index));
+  const updateEntryRule = useCallback((nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => {
+    setNodes(prev => prev.map(node => {
+      if (node.id !== nodeId || !node.entryRules) return node;
+      return {
+        ...node,
+        entryRules: node.entryRules.map(rule =>
+          rule.id === ruleId ? { ...rule, ...updates } : rule
+        ),
+      };
+    }));
+  }, []);
+
+  const removeEntryRule = useCallback((nodeId: string, ruleId: string) => {
+    setNodes(prev => prev.map(node => {
+      if (node.id !== nodeId || !node.entryRules) return node;
+      return {
+        ...node,
+        entryRules: node.entryRules.filter(rule => rule.id !== ruleId),
+      };
+    }));
   }, []);
 
   return {
     // State
     nodes,
-    edges,
+    edges, // 動的に生成される
     setNodes,
-    setEdges,
     editingChoicesIndex,
     // Derived data
     coverageResults,
@@ -164,9 +233,9 @@ export function useFlowchartState(initialNodes: CustomNode[], initialEdges: Cust
     addChoice,
     removeChoice,
     updateChoice,
-    // Edge actions
-    addEdge,
-    updateEdge,
-    removeEdge,
+    // EntryRule actions
+    addEntryRule,
+    updateEntryRule,
+    removeEntryRule,
   };
 }

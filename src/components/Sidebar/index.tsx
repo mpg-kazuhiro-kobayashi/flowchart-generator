@@ -1,9 +1,8 @@
 'use client';
 
-import { CustomNode, CustomEdge, FlowchartDefinition } from '@/types/flowchart';
+import { CustomNode, CustomEdge } from '@/types/flowchart';
 import { CoverageResult, EdgeConflict, CompoundCoverageResult } from '@/domain/coverage';
 import NodeList from './NodeList';
-import EdgeList from './EdgeList';
 
 interface SidebarProps {
   // ノード関連
@@ -19,13 +18,9 @@ interface SidebarProps {
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
   onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
-  // エッジ関連
+  // エッジ関連（動的生成されたもの）
   edges: CustomEdge[];
-  onAddEdge: () => void;
-  onUpdateEdge: (index: number, updates: Partial<CustomEdge>) => void;
-  onRemoveEdge: (index: number) => void;
   // デバッグ表示
-  currentDefinition: FlowchartDefinition;
   mermaidCode: string;
 }
 
@@ -43,10 +38,6 @@ export default function Sidebar({
   onRemoveChoice,
   onUpdateChoice,
   edges,
-  onAddEdge,
-  onUpdateEdge,
-  onRemoveEdge,
-  currentDefinition,
   mermaidCode,
 }: SidebarProps) {
   return (
@@ -54,7 +45,7 @@ export default function Sidebar({
       {/* 操作説明 */}
       <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
         <p className="text-sm text-blue-800">
-          <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードから新しい接続を追加できます。
+          <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードの設定や到達ルールを編集できます。
         </p>
       </div>
 
@@ -75,21 +66,31 @@ export default function Sidebar({
           onUpdateChoice={onUpdateChoice}
         />
 
-        {/* エッジエディター */}
-        <EdgeList
-          edges={edges}
-          nodes={nodes}
-          onAddEdge={onAddEdge}
-          onUpdateEdge={onUpdateEdge}
-          onRemoveEdge={onRemoveEdge}
-        />
+        {/* エッジ一覧（読み取り専用） */}
+        {edges.length > 0 && (
+          <div>
+            <h3 className="font-semibold mb-2 text-gray-900">エッジ一覧（entryRules から生成）</h3>
+            <div className="space-y-2">
+              {edges.map((edge, index) => (
+                <div key={index} className="p-2 bg-gray-50 rounded border border-gray-200 text-sm">
+                  <span className="font-mono text-gray-600">{edge.from}</span>
+                  <span className="mx-2 text-gray-400">→</span>
+                  <span className="font-mono text-gray-600">{edge.to}</span>
+                  {edge.label && (
+                    <span className="ml-2 text-gray-500">({edge.label})</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Object定義表示 */}
       <div className="mt-6">
-        <h3 className="font-semibold mb-2 text-gray-900">FlowchartDefinition オブジェクト</h3>
+        <h3 className="font-semibold mb-2 text-gray-900">Nodes オブジェクト</h3>
         <pre className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs overflow-x-auto max-h-60 overflow-y-auto">
-          {JSON.stringify(currentDefinition, null, 2)}
+          {JSON.stringify(nodes, null, 2)}
         </pre>
       </div>
 

@@ -181,6 +181,28 @@ export interface FlowchartDefinition {
   };
 }
 
+/** ノードの表示条件 */
+export type NodeVisibilityCondition =
+  | { type: 'always' } // 無条件遷移
+  | { type: 'choice'; choiceIds: string[] } // sourceNodeId自身の選択肢
+  | { type: 'numeric'; numeric: NumericCondition } // 数値条件
+  | { type: 'compound'; compound: CompoundCondition } // 複合条件（AND条件）
+  | { type: 'default' }; // 他の条件にマッチしない場合（else分岐）
+
+/** ノードへの到達ルール */
+export interface NodeEntryRule {
+  /** ルールID（UI管理用） */
+  id: string;
+  /** このノードへ到達する直前のノードID */
+  sourceNodeId: string;
+  /** エッジラベル（Mermaid出力向け） */
+  label?: string;
+  /** 矢印スタイル */
+  style?: EdgeStyle;
+  /** 表示条件 */
+  visibilityCondition?: NodeVisibilityCondition;
+}
+
 /** カスタムノード（エディタ用） */
 export interface CustomNode {
   id: string;
@@ -188,9 +210,11 @@ export interface CustomNode {
   shape: NodeShape;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
+  /** このノードが表示される経路を表すルール */
+  entryRules?: NodeEntryRule[];
 }
 
-/** カスタムエッジ（エディタ用） */
+/** カスタムエッジ（エディタ用） - 後方互換性のため残す */
 export interface CustomEdge {
   from: string;
   to: string;

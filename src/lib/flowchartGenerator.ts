@@ -7,6 +7,8 @@ import {
   FlowchartLinkStyle,
   NodeShape,
   EdgeStyle,
+  CustomNode,
+  NodeEntryRule,
 } from '@/types/flowchart';
 
 /**
@@ -240,6 +242,39 @@ export class FlowchartGenerator {
       .join(',');
 
     return `linkStyle ${linkStyle.linkIndex} ${styleStr}`;
+  }
+
+  /**
+   * CustomNode[] の entryRules から FlowchartEdge[] を生成
+   * 新しいデータモデルで edges 配列を動的に復元する
+   */
+  static generateEdgesFromEntryRules(nodes: CustomNode[]): FlowchartEdge[] {
+    const edges: FlowchartEdge[] = [];
+
+    for (const node of nodes) {
+      if (!node.entryRules || node.entryRules.length === 0) {
+        // ルートノード: エッジなし
+        continue;
+      }
+
+      for (const rule of node.entryRules) {
+        edges.push(this.entryRuleToEdge(rule, node.id));
+      }
+    }
+
+    return edges;
+  }
+
+  /**
+   * 単一の NodeEntryRule を FlowchartEdge に変換
+   */
+  private static entryRuleToEdge(rule: NodeEntryRule, targetNodeId: string): FlowchartEdge {
+    return {
+      from: rule.sourceNodeId,
+      to: targetNodeId,
+      style: rule.style || 'solid',
+      label: rule.label,
+    };
   }
 }
 
