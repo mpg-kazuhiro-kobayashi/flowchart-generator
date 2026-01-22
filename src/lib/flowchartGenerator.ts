@@ -12,6 +12,11 @@ import {
   CustomNode,
   NodeEntryRule,
 } from '@/types/flowchart';
+import {
+  formatCondition,
+  createConditionLabelResolver,
+  ConditionLabelResolver,
+} from '@/domain/conditionFormatter';
 
 /**
  * JavaScript Object から Mermaid フローチャート文字列を生成するクラス
@@ -251,6 +256,7 @@ export class FlowchartGenerator {
    * 新しいデータモデルで edges 配列を動的に復元する
    */
   static generateEdgesFromEntryRules(nodes: CustomNode[]): FlowchartEdge[] {
+    const resolver = createConditionLabelResolver(nodes);
     const edges: FlowchartEdge[] = [];
 
     for (const node of nodes) {
@@ -260,7 +266,7 @@ export class FlowchartGenerator {
       }
 
       for (const rule of node.entryRules) {
-        edges.push(this.entryRuleToEdge(rule, node.id));
+        edges.push(this.entryRuleToEdge(rule, node.id, resolver));
       }
     }
 
@@ -270,13 +276,25 @@ export class FlowchartGenerator {
   /**
    * 単一の NodeEntryRule を FlowchartEdge に変換
    * visibilityCondition を condition / compoundCondition に正規化して埋め込む
+   * ラベルは visibilityCondition から自動生成する
    */
-  private static entryRuleToEdge(rule: NodeEntryRule, targetNodeId: string): FlowchartEdge {
+  private static entryRuleToEdge(
+    rule: NodeEntryRule,
+    targetNodeId: string,
+    resolver: ConditionLabelResolver
+  ): FlowchartEdge {
+    // visibilityCondition からラベルを自動生成
+    const label = formatCondition(
+      rule.visibilityCondition,
+      rule.sourceNodeId,
+      resolver
+    );
+
     const edge: FlowchartEdge = {
       from: rule.sourceNodeId,
       to: targetNodeId,
       style: rule.style || 'solid',
-      label: rule.label,
+      label: label || undefined,
     };
 
     // visibilityCondition を condition / compoundCondition に変換

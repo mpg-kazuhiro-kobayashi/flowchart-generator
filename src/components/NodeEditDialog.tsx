@@ -450,11 +450,6 @@ export default function NodeEditDialog({
                             <div className="text-sm font-medium text-gray-900">
                               {sourceNodeInfo?.label || rule.sourceNodeId} →
                             </div>
-                            {rule.label && (
-                              <div className="text-xs text-gray-600 mt-1">
-                                ラベル: {rule.label}
-                              </div>
-                            )}
                             <div className="text-xs text-gray-500 mt-1">
                               条件: {rule.visibilityCondition?.type || 'なし'}
                             </div>

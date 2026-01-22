@@ -197,8 +197,6 @@ export interface NodeEntryRule {
   id: string;
   /** このノードへ到達する直前のノードID */
   sourceNodeId: string;
-  /** エッジラベル（Mermaid出力向け） */
-  label?: string;
   /** 矢印スタイル */
   style?: EdgeStyle;
   /** 表示条件 */

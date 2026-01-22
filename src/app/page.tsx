@@ -58,7 +58,6 @@ const initialNodes: CustomNode[] = [
       {
         id: 'rule-node2-1',
         sourceNodeId: NODE_ID_1,
-        label: "選択肢1, 選択肢2",
         style: "solid",
         visibilityCondition: {
           type: 'choice',
@@ -75,7 +74,6 @@ const initialNodes: CustomNode[] = [
       {
         id: 'rule-node3-1',
         sourceNodeId: NODE_ID_2,
-        label: "Node 2: Yes AND Node 1: 選択肢1, 選択肢2",
         style: "solid",
         visibilityCondition: {
           type: 'compound',
@@ -98,7 +96,6 @@ const initialNodes: CustomNode[] = [
       {
         id: 'rule-node4-1',
         sourceNodeId: NODE_ID_2,
-        label: "Node 2: Yes AND Node 1: 選択肢2",
         style: "solid",
         visibilityCondition: {
           type: 'compound',
@@ -121,7 +118,6 @@ const initialNodes: CustomNode[] = [
       {
         id: 'rule-node5-1',
         sourceNodeId: NODE_ID_2,
-        label: "No",
         style: "solid",
         visibilityCondition: {
           type: 'choice',
@@ -238,10 +234,20 @@ export default function Home() {
     const toNode = customNodes.find(n => n.id === edgeInfo.toNodeId);
     if (!toNode || !toNode.entryRules) return;
 
-    // fromNodeId とラベルから該当するルールを特定
-    const rule = toNode.entryRules.find(r =>
-      r.sourceNodeId === edgeInfo.fromNodeId && r.label === edgeInfo.label
+    // edgeIndex を使って customEdges から該当するエッジを特定し、
+    // 同じ from/to のルールが複数ある場合は順序で区別する
+    const clickedEdge = customEdges[edgeInfo.edgeIndex];
+    if (!clickedEdge) return;
+
+    // 同じ from/to ペアを持つエッジのうち、何番目かを特定
+    const sameFromToEdges = customEdges.filter(
+      (e, i) => i <= edgeInfo.edgeIndex && e.from === edgeInfo.fromNodeId && e.to === edgeInfo.toNodeId
     );
+    const edgeOrderIndex = sameFromToEdges.length - 1;
+
+    // 同じ sourceNodeId を持つルールの中から該当するものを特定
+    const matchingRules = toNode.entryRules.filter(r => r.sourceNodeId === edgeInfo.fromNodeId);
+    const rule = matchingRules[edgeOrderIndex];
 
     if (rule) {
       setEntryRuleDialogInfo({
@@ -250,7 +256,7 @@ export default function Home() {
         rule,
       });
     }
-  }, [customNodes]);
+  }, [customNodes, customEdges]);
 
   // ノード更新のハンドラ（ダイアログから）
   const handleUpdateNode = useCallback((nodeId: string, update: NodeUpdateResult) => {
@@ -403,7 +409,7 @@ export default function Home() {
         onClose={closeEntryRuleDialog}
         targetNodeId={entryRuleDialogInfo?.targetNodeId ?? ''}
         targetNodeLabel={entryRuleDialogInfo?.targetNodeLabel ?? ''}
-        rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', label: '', style: 'solid', visibilityCondition: { type: 'always' } }}
+        rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', style: 'solid', visibilityCondition: { type: 'always' } }}
         availableNodes={entryRuleDialogAvailableNodes}
         conditionNodes={entryRuleDialogConditionNodes}
         onUpdateRule={handleEntryRuleDialogUpdate}

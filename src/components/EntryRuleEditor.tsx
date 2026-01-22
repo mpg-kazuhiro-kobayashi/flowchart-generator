@@ -60,7 +60,6 @@ export default function EntryRuleEditor({
   // 状態
   const [sourceNodeId, setSourceNodeId] = useState<string>('');
   const [conditionType, setConditionType] = useState<ConditionType>('always');
-  const [label, setLabel] = useState('');
   const [style, setStyle] = useState<EdgeStyle>('solid');
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
   const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
@@ -77,7 +76,6 @@ export default function EntryRuleEditor({
   useEffect(() => {
     if (mode === 'edit' && initialRule) {
       setSourceNodeId(initialRule.sourceNodeId);
-      setLabel(initialRule.label || '');
       setStyle(initialRule.style || 'solid');
 
       const condition = initialRule.visibilityCondition;
@@ -120,7 +118,6 @@ export default function EntryRuleEditor({
       // 新規追加モード
       setSourceNodeId(selectableNodes.length > 0 ? selectableNodes[0].id : '');
       setConditionType('always');
-      setLabel('');
       setStyle('solid');
       setSelectedChoiceIds([]);
       setNumericOperator('eq');
@@ -143,43 +140,6 @@ export default function EntryRuleEditor({
       newConditions.delete(nodeId);
     }
     setCompoundConditions(newConditions);
-  };
-
-  // 条件ラベルを自動生成
-  const generateConditionLabel = (): string => {
-    if (conditionType === 'always') {
-      return '';
-    }
-    if (conditionType === 'default') {
-      return 'その他';
-    }
-    if (conditionType === 'choice' && selectedSourceConditionNode?.choices && selectedChoiceIds.length > 0) {
-      const selectedLabels = selectedSourceConditionNode.choices
-        .filter(c => selectedChoiceIds.includes(c.id))
-        .map(c => c.label);
-      return selectedLabels.join(', ');
-    }
-    if (conditionType === 'numeric' && numericValue) {
-      const op = numericOperators.find(o => o.value === numericOperator);
-      return `${op?.symbol || ''} ${numericValue}`;
-    }
-    if (conditionType === 'compound' && compoundConditions.size > 0) {
-      const parts: string[] = [];
-      for (const [nodeId, condition] of compoundConditions) {
-        const node = conditionNodes.find(n => n.id === nodeId);
-        if (node && condition.choiceCondition) {
-          const choiceLabels = node.choices
-            ?.filter(c => condition.choiceCondition!.choiceIds.includes(c.id))
-            .map(c => c.label) || [];
-          parts.push(`${node.label}: ${choiceLabels.join(', ')}`);
-        } else if (node && condition.numericCondition) {
-          const op = numericOperators.find(o => o.value === condition.numericCondition!.operator);
-          parts.push(`${node.label}: ${op?.symbol || ''} ${condition.numericCondition!.value}`);
-        }
-      }
-      return parts.join(' AND ');
-    }
-    return label;
   };
 
   // バリデーション
@@ -243,11 +203,8 @@ export default function EntryRuleEditor({
         break;
     }
 
-    const finalLabel = label || generateConditionLabel();
-
     const rule: Omit<NodeEntryRule, 'id'> = {
       sourceNodeId,
-      label: finalLabel,
       style,
       visibilityCondition,
     };
@@ -497,20 +454,6 @@ export default function EntryRuleEditor({
           </div>
         </div>
       )}
-
-      {/* ラベル */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          ラベル（任意）
-        </label>
-        <input
-          type="text"
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-          placeholder={generateConditionLabel() || '自動生成されます'}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-        />
-      </div>
 
       {/* 保存・キャンセルボタン */}
       <div className="flex gap-2">
