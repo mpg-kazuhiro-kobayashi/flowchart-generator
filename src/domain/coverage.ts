@@ -148,7 +148,7 @@ export function checkChoiceCoverage<T extends GraphNode>(
 /**
  * エッジ競合の種類
  */
-export type ConflictType = 'exact' | 'partial' | 'subset';
+type ConflictType = 'exact' | 'partial' | 'subset';
 
 /**
  * エッジ競合の詳細
@@ -167,7 +167,7 @@ export interface EdgeConflict {
 /**
  * ノードごとの競合チェック結果
  */
-export interface ConflictResult {
+interface ConflictResult {
   /** ソースノードID */
   nodeId: string;
   /** 競合しているエッジのペア */
@@ -546,7 +546,7 @@ export function checkEdgeConditionConflicts<T extends GraphNode>(
 /**
  * 組み合わせ条件の詳細
  */
-export interface CombinationCondition {
+interface CombinationCondition {
   nodeId: string;
   nodeLabel: string;
   choiceIds: string[];
@@ -556,7 +556,7 @@ export interface CombinationCondition {
 /**
  * 未カバーの組み合わせ
  */
-export interface UncoveredCombination {
+interface UncoveredCombination {
   conditions: CombinationCondition[];
 }
 

@@ -25,20 +25,3 @@ export function generateUUID(): string {
 
   return result;
 }
-
-/**
- * ノード用の短縮IDを生成する
- * @returns 短縮ID（8文字）
- */
-export function generateShortUUID(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const letters = 'abcdefghijklmnopqrstuvwxyz';
-
-  let result = letters[Math.floor(Math.random() * letters.length)];
-
-  for (let i = 0; i < 7; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-
-  return result;
-}
