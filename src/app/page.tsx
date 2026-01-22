@@ -155,7 +155,7 @@ export default function Home() {
   } = flowchartState;
 
   // ダイアログ状態管理
-  const dialogState = useDialogState(customNodes, customEdges);
+  const dialogState = useDialogState();
   const {
     isNodeDialogOpen,
     selectedSourceNode,
