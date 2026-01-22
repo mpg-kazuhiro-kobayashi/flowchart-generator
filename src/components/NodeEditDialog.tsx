@@ -1,19 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, EdgeStyle, NumericOperator, ChoiceOption, QuestionCategory, NodeEntryRule, NodeVisibilityCondition, SingleCondition } from '@/types/flowchart';
+import { FlowchartNode, ChoiceOption, QuestionCategory, NodeEntryRule } from '@/types/flowchart';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
 import { EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
-
-// 数値演算子のオプション
-const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
-  { value: 'eq', label: '等しい', symbol: '=' },
-  { value: 'gt', label: 'より大きい', symbol: '>' },
-  { value: 'lt', label: 'より小さい', symbol: '<' },
-  { value: 'gte', label: '以上', symbol: '>=' },
-  { value: 'lte', label: '以下', symbol: '<=' },
-];
+import EntryRuleEditor, { ConditionNode } from './EntryRuleEditor';
 
 // 設問カテゴリオプション
 const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
@@ -23,12 +15,6 @@ const questionCategories: { value: QuestionCategory | ''; label: string; descrip
   { value: 'FA', label: 'FA（自由入力）', description: 'テキスト入力（分岐不可）' },
   { value: 'NA', label: 'NA（数値入力）', description: '数値入力（条件分岐可能）' },
 ];
-
-/** 複合条件用のノード定義（questionCategory と choices を含む） */
-interface ConditionNode extends FlowchartNode {
-  questionCategory?: QuestionCategory;
-  choices?: ChoiceOption[];
-}
 
 /** ノード更新の結果 */
 export interface NodeUpdateResult {
@@ -66,7 +52,6 @@ interface NodeEditDialogProps {
 }
 
 type TabType = 'settings' | 'entryRules';
-type ConditionType = 'always' | 'choice' | 'numeric' | 'compound' | 'default';
 
 export default function NodeEditDialog({
   isOpen,
@@ -90,39 +75,9 @@ export default function NodeEditDialog({
   const [nodeQuestionCategory, setNodeQuestionCategory] = useState<QuestionCategory | ''>('');
   const [nodeChoices, setNodeChoices] = useState<ChoiceOption[]>([]);
 
-  // 到達ルール追加用の状態
+  // 到達ルール用の状態（シンプル化）
   const [isAddingRule, setIsAddingRule] = useState(false);
-  const [newRuleSourceNodeId, setNewRuleSourceNodeId] = useState<string>('');
-  const [newRuleConditionType, setNewRuleConditionType] = useState<ConditionType>('always');
-  const [newRuleLabel, setNewRuleLabel] = useState('');
-  const [newRuleStyle, setNewRuleStyle] = useState<EdgeStyle>('solid');
-  const [newRuleSelectedChoiceIds, setNewRuleSelectedChoiceIds] = useState<string[]>([]);
-  const [newRuleNumericOperator, setNewRuleNumericOperator] = useState<NumericOperator>('eq');
-  const [newRuleNumericValue, setNewRuleNumericValue] = useState<string>('');
-  const [newRuleCompoundConditions, setNewRuleCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
-
-  // 到達ルール編集用の状態
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [editRuleSourceNodeId, setEditRuleSourceNodeId] = useState<string>('');
-  const [editRuleConditionType, setEditRuleConditionType] = useState<ConditionType>('always');
-  const [editRuleLabel, setEditRuleLabel] = useState('');
-  const [editRuleStyle, setEditRuleStyle] = useState<EdgeStyle>('solid');
-  const [editRuleSelectedChoiceIds, setEditRuleSelectedChoiceIds] = useState<string[]>([]);
-  const [editRuleNumericOperator, setEditRuleNumericOperator] = useState<NumericOperator>('eq');
-  const [editRuleNumericValue, setEditRuleNumericValue] = useState<string>('');
-  const [editRuleCompoundConditions, setEditRuleCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
-
-  // 新しいルール状態をリセット
-  const resetNewRuleState = () => {
-    setNewRuleSourceNodeId(availableNodes.length > 0 ? availableNodes[0].id : '');
-    setNewRuleConditionType('always');
-    setNewRuleLabel('');
-    setNewRuleStyle('solid');
-    setNewRuleSelectedChoiceIds([]);
-    setNewRuleNumericOperator('eq');
-    setNewRuleNumericValue('');
-    setNewRuleCompoundConditions(new Map());
-  };
 
   // ダイアログが開いたときに状態をリセット
   useEffect(() => {
@@ -134,21 +89,15 @@ export default function NodeEditDialog({
 
       // 到達ルール追加をリセット
       setIsAddingRule(false);
-      resetNewRuleState();
+      setEditingRuleId(null);
 
       // デフォルトタブ
       setActiveTab('settings');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, sourceNode]);
 
   // 利用可能なノード（ソースノード自身を除く）
   const selectableNodes = availableNodes.filter(n => n.id !== sourceNode?.id);
-
-  // 選択されたソースノードの情報
-  const selectedSourceConditionNode = conditionNodes.find(n => n.id === newRuleSourceNodeId);
-  const sourceHasChoices = selectedSourceConditionNode?.choices && selectedSourceConditionNode.choices.length > 0;
-  const sourceIsNumeric = selectedSourceConditionNode?.questionCategory === 'NA';
 
   // 選択肢追加
   const addChoice = () => {
@@ -187,98 +136,18 @@ export default function NodeEditDialog({
     onClose();
   };
 
-  // 条件ラベルを自動生成
-  const generateConditionLabel = (): string => {
-    if (newRuleConditionType === 'always') {
-      return '';
-    }
-    if (newRuleConditionType === 'default') {
-      return 'その他';
-    }
-    if (newRuleConditionType === 'choice' && selectedSourceConditionNode?.choices && newRuleSelectedChoiceIds.length > 0) {
-      const selectedLabels = selectedSourceConditionNode.choices
-        .filter(c => newRuleSelectedChoiceIds.includes(c.id))
-        .map(c => c.label);
-      return selectedLabels.join(', ');
-    }
-    if (newRuleConditionType === 'numeric' && newRuleNumericValue) {
-      const op = numericOperators.find(o => o.value === newRuleNumericOperator);
-      return `${op?.symbol || ''} ${newRuleNumericValue}`;
-    }
-    if (newRuleConditionType === 'compound' && newRuleCompoundConditions.size > 0) {
-      const parts: string[] = [];
-      for (const [nodeId, condition] of newRuleCompoundConditions) {
-        const node = conditionNodes.find(n => n.id === nodeId);
-        if (node && condition.choiceCondition) {
-          const choiceLabels = node.choices
-            ?.filter(c => condition.choiceCondition!.choiceIds.includes(c.id))
-            .map(c => c.label) || [];
-          parts.push(`${node.label}: ${choiceLabels.join(', ')}`);
-        } else if (node && condition.numericCondition) {
-          const op = numericOperators.find(o => o.value === condition.numericCondition!.operator);
-          parts.push(`${node.label}: ${op?.symbol || ''} ${condition.numericCondition!.value}`);
-        }
-      }
-      return parts.join(' AND ');
-    }
-    return newRuleLabel;
+  // 到達ルール追加ハンドラ
+  const handleAddEntryRule = (rule: Omit<NodeEntryRule, 'id'>) => {
+    if (!sourceNode || !onAddEntryRule) return;
+    onAddEntryRule(sourceNode.id, rule);
+    setIsAddingRule(false);
   };
 
-  // 到達ルール追加を実行
-  const handleAddEntryRule = () => {
-    if (!sourceNode || !onAddEntryRule || !newRuleSourceNodeId) return;
-
-    let visibilityCondition: NodeVisibilityCondition | undefined;
-
-    switch (newRuleConditionType) {
-      case 'always':
-        visibilityCondition = { type: 'always' };
-        break;
-      case 'default':
-        visibilityCondition = { type: 'default' };
-        break;
-      case 'choice':
-        if (newRuleSelectedChoiceIds.length > 0) {
-          visibilityCondition = { type: 'choice', choiceIds: newRuleSelectedChoiceIds };
-        }
-        break;
-      case 'numeric':
-        if (newRuleNumericValue) {
-          visibilityCondition = {
-            type: 'numeric',
-            numeric: {
-              operator: newRuleNumericOperator,
-              value: parseFloat(newRuleNumericValue),
-            },
-          };
-        }
-        break;
-      case 'compound':
-        if (newRuleCompoundConditions.size >= 1) {
-          const conditions = Array.from(newRuleCompoundConditions.values());
-          visibilityCondition = {
-            type: 'compound',
-            compound: {
-              conditions,
-              operator: 'AND',
-            },
-          };
-        }
-        break;
-    }
-
-    const finalLabel = newRuleLabel || generateConditionLabel();
-
-    const newRule: Omit<NodeEntryRule, 'id'> = {
-      sourceNodeId: newRuleSourceNodeId,
-      label: finalLabel,
-      style: newRuleStyle,
-      visibilityCondition,
-    };
-
-    onAddEntryRule(sourceNode.id, newRule);
-    setIsAddingRule(false);
-    resetNewRuleState();
+  // 到達ルール更新ハンドラ
+  const handleUpdateEntryRule = (rule: Omit<NodeEntryRule, 'id'>) => {
+    if (!sourceNode || !onUpdateEntryRule || !editingRuleId) return;
+    onUpdateEntryRule(sourceNode.id, editingRuleId, rule);
+    setEditingRuleId(null);
   };
 
   // 到達ルール削除
@@ -289,221 +158,13 @@ export default function NodeEditDialog({
     }
   };
 
-  // 到達ルール更新を実行
-  const handleUpdateEntryRule = () => {
-    if (!sourceNode || !onUpdateEntryRule || !editingRuleId || !editRuleSourceNodeId) return;
-
-    let visibilityCondition: NodeVisibilityCondition | undefined;
-
-    switch (editRuleConditionType) {
-      case 'always':
-        visibilityCondition = { type: 'always' };
-        break;
-      case 'default':
-        visibilityCondition = { type: 'default' };
-        break;
-      case 'choice':
-        if (editRuleSelectedChoiceIds.length > 0) {
-          visibilityCondition = { type: 'choice', choiceIds: editRuleSelectedChoiceIds };
-        }
-        break;
-      case 'numeric':
-        if (editRuleNumericValue) {
-          visibilityCondition = {
-            type: 'numeric',
-            numeric: {
-              operator: editRuleNumericOperator,
-              value: parseFloat(editRuleNumericValue),
-            },
-          };
-        }
-        break;
-      case 'compound':
-        if (editRuleCompoundConditions.size >= 1) {
-          const conditions = Array.from(editRuleCompoundConditions.values());
-          visibilityCondition = {
-            type: 'compound',
-            compound: {
-              conditions,
-              operator: 'AND',
-            },
-          };
-        }
-        break;
-    }
-
-    const finalLabel = editRuleLabel || generateEditConditionLabel();
-
-    const updates: Partial<NodeEntryRule> = {
-      sourceNodeId: editRuleSourceNodeId,
-      label: finalLabel,
-      style: editRuleStyle,
-      visibilityCondition,
-    };
-
-    onUpdateEntryRule(sourceNode.id, editingRuleId, updates);
-    setEditingRuleId(null);
-  };
-
-  // 複合条件を更新するヘルパー関数（新規追加用）
-  const updateCompoundCondition = (nodeId: string, condition: SingleCondition | null) => {
-    const newConditions = new Map(newRuleCompoundConditions);
-    if (condition) {
-      newConditions.set(nodeId, condition);
-    } else {
-      newConditions.delete(nodeId);
-    }
-    setNewRuleCompoundConditions(newConditions);
-  };
-
-  // 複合条件を更新するヘルパー関数（編集用）
-  const updateEditCompoundCondition = (nodeId: string, condition: SingleCondition | null) => {
-    const newConditions = new Map(editRuleCompoundConditions);
-    if (condition) {
-      newConditions.set(nodeId, condition);
-    } else {
-      newConditions.delete(nodeId);
-    }
-    setEditRuleCompoundConditions(newConditions);
-  };
-
-  // 編集モードを開始する
-  const startEditRule = (rule: NodeEntryRule) => {
-    setEditingRuleId(rule.id);
-    setEditRuleSourceNodeId(rule.sourceNodeId);
-    setEditRuleLabel(rule.label || '');
-    setEditRuleStyle(rule.style || 'solid');
-
-    // 条件タイプと関連状態を設定
-    const condition = rule.visibilityCondition;
-    if (!condition) {
-      setEditRuleConditionType('always');
-      setEditRuleSelectedChoiceIds([]);
-      setEditRuleNumericOperator('eq');
-      setEditRuleNumericValue('');
-      setEditRuleCompoundConditions(new Map());
-    } else if (condition.type === 'always') {
-      setEditRuleConditionType('always');
-      setEditRuleSelectedChoiceIds([]);
-      setEditRuleNumericOperator('eq');
-      setEditRuleNumericValue('');
-      setEditRuleCompoundConditions(new Map());
-    } else if (condition.type === 'default') {
-      setEditRuleConditionType('default');
-      setEditRuleSelectedChoiceIds([]);
-      setEditRuleNumericOperator('eq');
-      setEditRuleNumericValue('');
-      setEditRuleCompoundConditions(new Map());
-    } else if (condition.type === 'choice') {
-      setEditRuleConditionType('choice');
-      setEditRuleSelectedChoiceIds(condition.choiceIds);
-      setEditRuleNumericOperator('eq');
-      setEditRuleNumericValue('');
-      setEditRuleCompoundConditions(new Map());
-    } else if (condition.type === 'numeric') {
-      setEditRuleConditionType('numeric');
-      setEditRuleSelectedChoiceIds([]);
-      setEditRuleNumericOperator(condition.numeric.operator);
-      setEditRuleNumericValue(String(condition.numeric.value));
-      setEditRuleCompoundConditions(new Map());
-    } else if (condition.type === 'compound') {
-      setEditRuleConditionType('compound');
-      setEditRuleSelectedChoiceIds([]);
-      setEditRuleNumericOperator('eq');
-      setEditRuleNumericValue('');
-      const compoundMap = new Map<string, SingleCondition>();
-      for (const cond of condition.compound.conditions) {
-        compoundMap.set(cond.nodeId, cond);
-      }
-      setEditRuleCompoundConditions(compoundMap);
-    }
-  };
-
-  // 編集をキャンセル
-  const cancelEditRule = () => {
-    setEditingRuleId(null);
-  };
-
-  // 編集中のソースノードの情報
-  const editSourceConditionNode = conditionNodes.find(n => n.id === editRuleSourceNodeId);
-  const editSourceHasChoices = editSourceConditionNode?.choices && editSourceConditionNode.choices.length > 0;
-  const editSourceIsNumeric = editSourceConditionNode?.questionCategory === 'NA';
-
-  // 編集用の条件ラベルを自動生成
-  const generateEditConditionLabel = (): string => {
-    if (editRuleConditionType === 'always') {
-      return '';
-    }
-    if (editRuleConditionType === 'default') {
-      return 'その他';
-    }
-    if (editRuleConditionType === 'choice' && editSourceConditionNode?.choices && editRuleSelectedChoiceIds.length > 0) {
-      const selectedLabels = editSourceConditionNode.choices
-        .filter(c => editRuleSelectedChoiceIds.includes(c.id))
-        .map(c => c.label);
-      return selectedLabels.join(', ');
-    }
-    if (editRuleConditionType === 'numeric' && editRuleNumericValue) {
-      const op = numericOperators.find(o => o.value === editRuleNumericOperator);
-      return `${op?.symbol || ''} ${editRuleNumericValue}`;
-    }
-    if (editRuleConditionType === 'compound' && editRuleCompoundConditions.size > 0) {
-      const parts: string[] = [];
-      for (const [nodeId, condition] of editRuleCompoundConditions) {
-        const node = conditionNodes.find(n => n.id === nodeId);
-        if (node && condition.choiceCondition) {
-          const choiceLabels = node.choices
-            ?.filter(c => condition.choiceCondition!.choiceIds.includes(c.id))
-            .map(c => c.label) || [];
-          parts.push(`${node.label}: ${choiceLabels.join(', ')}`);
-        } else if (node && condition.numericCondition) {
-          const op = numericOperators.find(o => o.value === condition.numericCondition!.operator);
-          parts.push(`${node.label}: ${op?.symbol || ''} ${condition.numericCondition!.value}`);
-        }
-      }
-      return parts.join(' AND ');
-    }
-    return editRuleLabel;
-  };
-
-  // バリデーション（新規追加用）
-  const isNewRuleValid = (() => {
-    if (!newRuleSourceNodeId) return false;
-    switch (newRuleConditionType) {
-      case 'always':
-      case 'default':
-        return true;
-      case 'choice':
-        return newRuleSelectedChoiceIds.length > 0;
-      case 'numeric':
-        return newRuleNumericValue !== '';
-      case 'compound':
-        return newRuleCompoundConditions.size >= 1;
-      default:
-        return false;
-    }
-  })();
-
-  // バリデーション（編集用）
-  const isEditRuleValid = (() => {
-    if (!editRuleSourceNodeId) return false;
-    switch (editRuleConditionType) {
-      case 'always':
-      case 'default':
-        return true;
-      case 'choice':
-        return editRuleSelectedChoiceIds.length > 0;
-      case 'numeric':
-        return editRuleNumericValue !== '';
-      case 'compound':
-        return editRuleCompoundConditions.size >= 1;
-      default:
-        return false;
-    }
-  })();
-
   const isSettingsValid = nodeLabel.trim() !== '';
   const isRootNode = !sourceNode?.entryRules || sourceNode.entryRules.length === 0;
+
+  // 編集中のルールを取得
+  const editingRule = editingRuleId
+    ? sourceNode?.entryRules?.find(r => r.id === editingRuleId)
+    : undefined;
 
   if (!isOpen || !sourceNode) return null;
 
@@ -765,276 +426,19 @@ export default function NodeEditDialog({
                     const sourceNodeInfo = availableNodes.find(n => n.id === rule.sourceNodeId);
                     const isEditing = editingRuleId === rule.id;
 
-                    if (isEditing) {
-                      // 編集モード
+                    if (isEditing && editingRule) {
+                      // 編集モード - EntryRuleEditor を使用
                       return (
-                        <div key={rule.id} className="p-4 bg-yellow-50 rounded-lg border-2 border-yellow-400 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-yellow-800">ルールを編集中</h4>
-                            <button
-                              type="button"
-                              onClick={cancelEditRule}
-                              className="text-gray-500 hover:text-gray-700"
-                            >
-                              ✕
-                            </button>
-                          </div>
-
-                          {/* ソースノード選択 */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              接続元ノード
-                            </label>
-                            <select
-                              value={editRuleSourceNodeId}
-                              onChange={e => {
-                                setEditRuleSourceNodeId(e.target.value);
-                                setEditRuleSelectedChoiceIds([]);
-                                setEditRuleNumericValue('');
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                            >
-                              {selectableNodes.map(node => (
-                                <option key={node.id} value={node.id}>
-                                  {node.label} ({node.id})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* 条件タイプ選択 */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              条件タイプ
-                            </label>
-                            <select
-                              value={editRuleConditionType}
-                              onChange={e => setEditRuleConditionType(e.target.value as ConditionType)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                            >
-                              <option value="always">無条件</option>
-                              {editSourceHasChoices && <option value="choice">選択肢条件</option>}
-                              {editSourceIsNumeric && <option value="numeric">数値条件</option>}
-                              {conditionNodes.length >= 1 && <option value="compound">複合条件</option>}
-                              <option value="default">デフォルト（その他）</option>
-                            </select>
-                          </div>
-
-                          {/* 選択肢条件 */}
-                          {editRuleConditionType === 'choice' && editSourceConditionNode?.choices && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                選択肢（複数選択可）
-                              </label>
-                              <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg border border-gray-200">
-                                {editSourceConditionNode.choices.map(choice => (
-                                  <button
-                                    key={choice.id}
-                                    type="button"
-                                    onClick={() => {
-                                      if (editRuleSelectedChoiceIds.includes(choice.id)) {
-                                        setEditRuleSelectedChoiceIds(editRuleSelectedChoiceIds.filter(id => id !== choice.id));
-                                      } else {
-                                        setEditRuleSelectedChoiceIds([...editRuleSelectedChoiceIds, choice.id]);
-                                      }
-                                    }}
-                                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                                      editRuleSelectedChoiceIds.includes(choice.id)
-                                        ? 'bg-yellow-500 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                  >
-                                    {choice.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 数値条件 */}
-                          {editRuleConditionType === 'numeric' && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                数値条件
-                              </label>
-                              <div className="flex gap-2 items-center">
-                                <select
-                                  value={editRuleNumericOperator}
-                                  onChange={e => setEditRuleNumericOperator(e.target.value as NumericOperator)}
-                                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                                >
-                                  {numericOperators.map(op => (
-                                    <option key={op.value} value={op.value}>
-                                      {op.label} ({op.symbol})
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  type="number"
-                                  value={editRuleNumericValue}
-                                  onChange={e => setEditRuleNumericValue(e.target.value)}
-                                  placeholder="値を入力"
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 複合条件 */}
-                          {editRuleConditionType === 'compound' && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                複合条件設定（AND条件）
-                              </label>
-                              <div className="space-y-2 max-h-40 overflow-y-auto">
-                                {conditionNodes.map(node => {
-                                  const currentCondition = editRuleCompoundConditions.get(node.id);
-                                  const isSelected = !!currentCondition;
-
-                                  return (
-                                    <div
-                                      key={node.id}
-                                      className={`p-2 rounded-lg border ${
-                                        isSelected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200'
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between mb-1">
-                                        <span className="font-medium text-gray-900 text-xs">
-                                          {node.label} ({node.questionCategory})
-                                        </span>
-                                        {isSelected && (
-                                          <button
-                                            type="button"
-                                            onClick={() => updateEditCompoundCondition(node.id, null)}
-                                            className="text-xs text-red-600"
-                                          >
-                                            クリア
-                                          </button>
-                                        )}
-                                      </div>
-
-                                      {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
-                                        <div className="flex flex-wrap gap-1">
-                                          {node.choices.map(choice => {
-                                            const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
-                                            return (
-                                              <button
-                                                key={choice.id}
-                                                type="button"
-                                                onClick={() => {
-                                                  const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                                                  const newChoices = isChoiceSelected
-                                                    ? currentChoices.filter(id => id !== choice.id)
-                                                    : [...currentChoices, choice.id];
-                                                  if (newChoices.length > 0) {
-                                                    updateEditCompoundCondition(node.id, {
-                                                      nodeId: node.id,
-                                                      conditionType: 'choice',
-                                                      choiceCondition: { choiceIds: newChoices },
-                                                    });
-                                                  } else {
-                                                    updateEditCompoundCondition(node.id, null);
-                                                  }
-                                                }}
-                                                className={`px-2 py-0.5 text-xs rounded ${
-                                                  isChoiceSelected
-                                                    ? 'bg-purple-600 text-white'
-                                                    : 'bg-gray-100 text-gray-700 border border-gray-300'
-                                                }`}
-                                              >
-                                                {choice.label}
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-
-                                      {node.questionCategory === 'NA' && (
-                                        <div className="flex gap-1 items-center">
-                                          <select
-                                            value={currentCondition?.numericCondition?.operator || 'eq'}
-                                            onChange={e => {
-                                              const value = currentCondition?.numericCondition?.value;
-                                              if (value !== undefined) {
-                                                updateEditCompoundCondition(node.id, {
-                                                  nodeId: node.id,
-                                                  conditionType: 'numeric',
-                                                  numericCondition: {
-                                                    operator: e.target.value as NumericOperator,
-                                                    value,
-                                                  },
-                                                });
-                                              }
-                                            }}
-                                            className="px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                                          >
-                                            {numericOperators.map(op => (
-                                              <option key={op.value} value={op.value}>{op.symbol}</option>
-                                            ))}
-                                          </select>
-                                          <input
-                                            type="number"
-                                            value={currentCondition?.numericCondition?.value ?? ''}
-                                            onChange={e => {
-                                              const value = e.target.value ? parseFloat(e.target.value) : undefined;
-                                              if (value !== undefined) {
-                                                updateEditCompoundCondition(node.id, {
-                                                  nodeId: node.id,
-                                                  conditionType: 'numeric',
-                                                  numericCondition: {
-                                                    operator: currentCondition?.numericCondition?.operator || 'eq',
-                                                    value,
-                                                  },
-                                                });
-                                              } else {
-                                                updateEditCompoundCondition(node.id, null);
-                                              }
-                                            }}
-                                            placeholder="値"
-                                            className="flex-1 px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* ラベル */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              ラベル（任意）
-                            </label>
-                            <input
-                              type="text"
-                              value={editRuleLabel}
-                              onChange={e => setEditRuleLabel(e.target.value)}
-                              placeholder={generateEditConditionLabel() || '自動生成されます'}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                            />
-                          </div>
-
-                          {/* 保存・キャンセルボタン */}
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={cancelEditRule}
-                              className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-                            >
-                              キャンセル
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleUpdateEntryRule}
-                              disabled={!isEditRuleValid}
-                              className="flex-1 py-2 px-4 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            >
-                              保存
-                            </button>
-                          </div>
-                        </div>
+                        <EntryRuleEditor
+                          key={rule.id}
+                          mode="edit"
+                          initialRule={editingRule}
+                          targetNodeId={sourceNode.id}
+                          availableNodes={availableNodes}
+                          conditionNodes={conditionNodes}
+                          onSave={handleUpdateEntryRule}
+                          onCancel={() => setEditingRuleId(null)}
+                        />
                       );
                     }
 
@@ -1058,8 +462,8 @@ export default function NodeEditDialog({
                           <div className="flex gap-1">
                             <button
                               type="button"
-                              onClick={() => startEditRule(rule)}
-                              disabled={editingRuleId !== null}
+                              onClick={() => setEditingRuleId(rule.id)}
+                              disabled={editingRuleId !== null || isAddingRule}
                               className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                             >
                               編集
@@ -1067,7 +471,7 @@ export default function NodeEditDialog({
                             <button
                               type="button"
                               onClick={() => handleRemoveEntryRule(rule.id)}
-                              disabled={editingRuleId !== null}
+                              disabled={editingRuleId !== null || isAddingRule}
                               className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                             >
                               削除
@@ -1088,272 +492,19 @@ export default function NodeEditDialog({
 
               {/* 到達ルール追加フォーム */}
               {isAddingRule ? (
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-green-800">新しい到達ルールを追加</h4>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingRule(false);
-                        resetNewRuleState();
-                      }}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {/* ソースノード選択 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      接続元ノード
-                    </label>
-                    <select
-                      value={newRuleSourceNodeId}
-                      onChange={e => {
-                        setNewRuleSourceNodeId(e.target.value);
-                        setNewRuleSelectedChoiceIds([]);
-                        setNewRuleNumericValue('');
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    >
-                      {selectableNodes.map(node => (
-                        <option key={node.id} value={node.id}>
-                          {node.label} ({node.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 条件タイプ選択 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      条件タイプ
-                    </label>
-                    <select
-                      value={newRuleConditionType}
-                      onChange={e => setNewRuleConditionType(e.target.value as ConditionType)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    >
-                      <option value="always">無条件</option>
-                      {sourceHasChoices && <option value="choice">選択肢条件</option>}
-                      {sourceIsNumeric && <option value="numeric">数値条件</option>}
-                      {conditionNodes.length >= 1 && <option value="compound">複合条件</option>}
-                      <option value="default">デフォルト（その他）</option>
-                    </select>
-                  </div>
-
-                  {/* 選択肢条件 */}
-                  {newRuleConditionType === 'choice' && selectedSourceConditionNode?.choices && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        選択肢（複数選択可）
-                      </label>
-                      <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg border border-gray-200">
-                        {selectedSourceConditionNode.choices.map(choice => (
-                          <button
-                            key={choice.id}
-                            type="button"
-                            onClick={() => {
-                              if (newRuleSelectedChoiceIds.includes(choice.id)) {
-                                setNewRuleSelectedChoiceIds(newRuleSelectedChoiceIds.filter(id => id !== choice.id));
-                              } else {
-                                setNewRuleSelectedChoiceIds([...newRuleSelectedChoiceIds, choice.id]);
-                              }
-                            }}
-                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                              newRuleSelectedChoiceIds.includes(choice.id)
-                                ? 'bg-green-500 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {choice.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 数値条件 */}
-                  {newRuleConditionType === 'numeric' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        数値条件
-                      </label>
-                      <div className="flex gap-2 items-center">
-                        <select
-                          value={newRuleNumericOperator}
-                          onChange={e => setNewRuleNumericOperator(e.target.value as NumericOperator)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                        >
-                          {numericOperators.map(op => (
-                            <option key={op.value} value={op.value}>
-                              {op.label} ({op.symbol})
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          value={newRuleNumericValue}
-                          onChange={e => setNewRuleNumericValue(e.target.value)}
-                          placeholder="値を入力"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 複合条件 */}
-                  {newRuleConditionType === 'compound' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        複合条件設定（AND条件）
-                      </label>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {conditionNodes.map(node => {
-                          const currentCondition = newRuleCompoundConditions.get(node.id);
-                          const isSelected = !!currentCondition;
-
-                          return (
-                            <div
-                              key={node.id}
-                              className={`p-2 rounded-lg border ${
-                                isSelected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-medium text-gray-900 text-xs">
-                                  {node.label} ({node.questionCategory})
-                                </span>
-                                {isSelected && (
-                                  <button
-                                    type="button"
-                                    onClick={() => updateCompoundCondition(node.id, null)}
-                                    className="text-xs text-red-600"
-                                  >
-                                    クリア
-                                  </button>
-                                )}
-                              </div>
-
-                              {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
-                                <div className="flex flex-wrap gap-1">
-                                  {node.choices.map(choice => {
-                                    const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
-                                    return (
-                                      <button
-                                        key={choice.id}
-                                        type="button"
-                                        onClick={() => {
-                                          const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                                          const newChoices = isChoiceSelected
-                                            ? currentChoices.filter(id => id !== choice.id)
-                                            : [...currentChoices, choice.id];
-                                          if (newChoices.length > 0) {
-                                            updateCompoundCondition(node.id, {
-                                              nodeId: node.id,
-                                              conditionType: 'choice',
-                                              choiceCondition: { choiceIds: newChoices },
-                                            });
-                                          } else {
-                                            updateCompoundCondition(node.id, null);
-                                          }
-                                        }}
-                                        className={`px-2 py-0.5 text-xs rounded ${
-                                          isChoiceSelected
-                                            ? 'bg-purple-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 border border-gray-300'
-                                        }`}
-                                      >
-                                        {choice.label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {node.questionCategory === 'NA' && (
-                                <div className="flex gap-1 items-center">
-                                  <select
-                                    value={currentCondition?.numericCondition?.operator || 'eq'}
-                                    onChange={e => {
-                                      const value = currentCondition?.numericCondition?.value;
-                                      if (value !== undefined) {
-                                        updateCompoundCondition(node.id, {
-                                          nodeId: node.id,
-                                          conditionType: 'numeric',
-                                          numericCondition: {
-                                            operator: e.target.value as NumericOperator,
-                                            value,
-                                          },
-                                        });
-                                      }
-                                    }}
-                                    className="px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                                  >
-                                    {numericOperators.map(op => (
-                                      <option key={op.value} value={op.value}>{op.symbol}</option>
-                                    ))}
-                                  </select>
-                                  <input
-                                    type="number"
-                                    value={currentCondition?.numericCondition?.value ?? ''}
-                                    onChange={e => {
-                                      const value = e.target.value ? parseFloat(e.target.value) : undefined;
-                                      if (value !== undefined) {
-                                        updateCompoundCondition(node.id, {
-                                          nodeId: node.id,
-                                          conditionType: 'numeric',
-                                          numericCondition: {
-                                            operator: currentCondition?.numericCondition?.operator || 'eq',
-                                            value,
-                                          },
-                                        });
-                                      } else {
-                                        updateCompoundCondition(node.id, null);
-                                      }
-                                    }}
-                                    placeholder="値"
-                                    className="flex-1 px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ラベル */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ラベル（任意）
-                    </label>
-                    <input
-                      type="text"
-                      value={newRuleLabel}
-                      onChange={e => setNewRuleLabel(e.target.value)}
-                      placeholder={generateConditionLabel() || '自動生成されます'}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    />
-                  </div>
-
-                  {/* 追加ボタン */}
-                  <button
-                    type="button"
-                    onClick={handleAddEntryRule}
-                    disabled={!isNewRuleValid}
-                    className="w-full py-2.5 px-4 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    到達ルールを追加
-                  </button>
-                </div>
+                <EntryRuleEditor
+                  mode="add"
+                  targetNodeId={sourceNode.id}
+                  availableNodes={availableNodes}
+                  conditionNodes={conditionNodes}
+                  onSave={handleAddEntryRule}
+                  onCancel={() => setIsAddingRule(false)}
+                />
               ) : (
                 <button
                   type="button"
                   onClick={() => setIsAddingRule(true)}
-                  disabled={selectableNodes.length === 0}
+                  disabled={selectableNodes.length === 0 || editingRuleId !== null}
                   className="w-full py-2.5 px-4 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
