@@ -130,6 +130,8 @@ export interface FlowchartEdge {
   label?: string;
   /** 分岐条件（設問ノードからの遷移の場合） */
   condition?: EdgeCondition;
+  /** 複合条件（複数ノードの条件を組み合わせる場合） */
+  compoundCondition?: CompoundCondition;
 }
 
 /** サブグラフ */
@@ -214,14 +216,3 @@ export interface CustomNode {
   entryRules?: NodeEntryRule[];
 }
 
-/** カスタムエッジ（エディタ用） - 後方互換性のため残す */
-export interface CustomEdge {
-  from: string;
-  to: string;
-  label: string;
-  style: EdgeStyle;
-  /** 単一条件（SA/MA/NA用） */
-  condition?: EdgeCondition;
-  /** 複合条件（AND条件） */
-  compoundCondition?: CompoundCondition;
-}

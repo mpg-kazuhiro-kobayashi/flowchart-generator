@@ -7,6 +7,8 @@ import {
   FlowchartLinkStyle,
   NodeShape,
   EdgeStyle,
+  EdgeCondition,
+  CompoundCondition,
   CustomNode,
   NodeEntryRule,
 } from '@/types/flowchart';
@@ -267,14 +269,46 @@ export class FlowchartGenerator {
 
   /**
    * 単一の NodeEntryRule を FlowchartEdge に変換
+   * visibilityCondition を condition / compoundCondition に正規化して埋め込む
    */
   private static entryRuleToEdge(rule: NodeEntryRule, targetNodeId: string): FlowchartEdge {
-    return {
+    const edge: FlowchartEdge = {
       from: rule.sourceNodeId,
       to: targetNodeId,
       style: rule.style || 'solid',
       label: rule.label,
     };
+
+    // visibilityCondition を condition / compoundCondition に変換
+    if (rule.visibilityCondition) {
+      const vc = rule.visibilityCondition;
+
+      switch (vc.type) {
+        case 'choice':
+          edge.condition = {
+            choiceIds: vc.choiceIds,
+          } satisfies EdgeCondition;
+          break;
+
+        case 'numeric':
+          edge.condition = {
+            numericCondition: vc.numeric,
+          } satisfies EdgeCondition;
+          break;
+
+        case 'compound':
+          edge.compoundCondition = vc.compound satisfies CompoundCondition;
+          break;
+
+        case 'always':
+        case 'default':
+          // 条件なし（無条件遷移またはデフォルト分岐）
+          // coverage では未指定扱い
+          break;
+      }
+    }
+
+    return edge;
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { CustomNode, CustomEdge } from '@/types/flowchart';
+import { CustomNode, FlowchartEdge } from '@/types/flowchart';
 import { CoverageResult, EdgeConflict, CompoundCoverageResult } from '@/domain/coverage';
 import NodeList from './NodeList';
 
@@ -19,7 +19,7 @@ interface SidebarProps {
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
   onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
   // エッジ関連（動的生成されたもの）
-  edges: CustomEdge[];
+  edges: FlowchartEdge[];
   // デバッグ表示
   mermaidCode: string;
 }

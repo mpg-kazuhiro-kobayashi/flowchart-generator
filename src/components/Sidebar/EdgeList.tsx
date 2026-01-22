@@ -1,12 +1,12 @@
 'use client';
 
-import { CustomNode, CustomEdge } from '@/types/flowchart';
+import { CustomNode, FlowchartEdge } from '@/types/flowchart';
 
 interface EdgeListProps {
-  edges: CustomEdge[];
+  edges: FlowchartEdge[];
   nodes: CustomNode[];
   onAddEdge: () => void;
-  onUpdateEdge: (index: number, updates: Partial<CustomEdge>) => void;
+  onUpdateEdge: (index: number, updates: Partial<FlowchartEdge>) => void;
   onRemoveEdge: (index: number) => void;
 }
 

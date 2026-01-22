@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { CustomNode, CustomEdge, NodeEntryRule, NodeVisibilityCondition } from '@/types/flowchart';
+import { CustomNode, FlowchartEdge, NodeEntryRule, NodeVisibilityCondition } from '@/types/flowchart';
 import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict, checkCompoundConditionCoverage, CompoundCoverageResult } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
@@ -19,14 +19,9 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
   // ========== エッジの動的生成 ==========
 
   // entryRules から edges を動的に生成
-  const edges = useMemo((): CustomEdge[] => {
-    const generatedEdges = FlowchartGenerator.generateEdgesFromEntryRules(nodes);
-    return generatedEdges.map(edge => ({
-      from: edge.from,
-      to: edge.to,
-      label: edge.label || '',
-      style: edge.style || 'solid',
-    }));
+  // condition / compoundCondition も含めて変換（網羅性チェックで使用）
+  const edges = useMemo((): FlowchartEdge[] => {
+    return FlowchartGenerator.generateEdgesFromEntryRules(nodes);
   }, [nodes]);
 
   // ========== 派生データ ==========

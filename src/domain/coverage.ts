@@ -2,7 +2,7 @@
  * 設問ノードの網羅性チェックに関するユーティリティ関数
  */
 
-import { QuestionCategory, ChoiceOption, NumericOperator, CompoundCondition, SingleCondition } from '@/types/flowchart';
+import { QuestionCategory, ChoiceOption, CompoundCondition, SingleCondition, FlowchartEdge } from '@/types/flowchart';
 import { NumericRange, operatorToRange, findNumericGaps, rangesOverlap, rangeContainedIn } from './numericRange';
 
 /**
@@ -13,23 +13,6 @@ interface GraphNode {
   label?: string;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
-}
-
-/**
- * エッジの型定義（条件情報を含む）
- */
-interface GraphEdge {
-  from: string;
-  to: string;
-  label?: string;
-  condition?: {
-    choiceIds?: string[];
-    numericCondition?: {
-      operator: NumericOperator;
-      value: number;
-    };
-  };
-  compoundCondition?: CompoundCondition;
 }
 
 /**
@@ -65,7 +48,7 @@ export interface CoverageResult {
  */
 export function checkChoiceCoverage<T extends GraphNode>(
   nodes: T[],
-  edges: GraphEdge[]
+  edges: FlowchartEdge[]
 ): CoverageResult[] {
   const results: CoverageResult[] = [];
 
@@ -86,23 +69,14 @@ export function checkChoiceCoverage<T extends GraphNode>(
     if ((node.questionCategory === 'SA' || node.questionCategory === 'MA') && choices.length > 0) {
       // このノードから直接出るエッジの条件をチェック
       for (const edge of outgoingEdges) {
-        // 1. エッジのラベルから使用されている選択肢を抽出
-        if (edge.label) {
-          for (const choice of choices) {
-            if (edge.label.includes(choice.label)) {
-              usedChoiceIds.add(choice.id);
-            }
-          }
-        }
-
-        // 2. エッジに直接設定された単一条件をチェック
+        // 1. エッジに直接設定された単一条件をチェック
         if (edge.condition?.choiceIds) {
           for (const choiceId of edge.condition.choiceIds) {
             usedChoiceIds.add(choiceId);
           }
         }
 
-        // 3. エッジの複合条件内で、このノード自身の選択肢が使用されているかチェック
+        // 2. エッジの複合条件内で、このノード自身の選択肢が使用されているかチェック
         if (edge.compoundCondition) {
           for (const condition of edge.compoundCondition.conditions) {
             if (condition.nodeId === node.id && condition.choiceCondition) {
@@ -238,7 +212,7 @@ interface NormalizedCondition {
   isCompound: boolean;
 }
 
-function extractCondition(edge: GraphEdge): NormalizedCondition | null {
+function extractCondition(edge: FlowchartEdge): NormalizedCondition | null {
   if (edge.compoundCondition) {
     return {
       compoundCondition: edge.compoundCondition,
@@ -280,8 +254,8 @@ function compareConditions(
   cond1: NormalizedCondition,
   cond2: NormalizedCondition,
   sourceNodeId: string,
-  edge1: GraphEdge,
-  edge2: GraphEdge
+  edge1: FlowchartEdge,
+  edge2: FlowchartEdge
 ): EdgeConflict | null {
   // 通常条件 vs 通常条件
   if (!cond1.isCompound && !cond2.isCompound) {
@@ -407,8 +381,8 @@ function compareConditions(
 function compareCompoundConditions(
   compound1: CompoundCondition,
   compound2: CompoundCondition,
-  edge1: GraphEdge,
-  edge2: GraphEdge
+  edge1: FlowchartEdge,
+  edge2: FlowchartEdge
 ): EdgeConflict | null {
   // 各ノードIDについて条件を比較
   const nodeIds1 = compound1.conditions.map(c => c.nodeId);
@@ -524,12 +498,12 @@ function compareCompoundConditions(
  */
 export function checkEdgeConditionConflicts<T extends GraphNode>(
   _nodes: T[],
-  edges: GraphEdge[]
+  edges: FlowchartEdge[]
 ): ConflictResult[] {
   const results: ConflictResult[] = [];
 
   // 各ノードをソースとするエッジをグループ化
-  const edgesBySource = new Map<string, GraphEdge[]>();
+  const edgesBySource = new Map<string, FlowchartEdge[]>();
   for (const edge of edges) {
     const existing = edgesBySource.get(edge.from) || [];
     existing.push(edge);
@@ -667,7 +641,7 @@ function combinationToKey(combination: ChoiceCombination): string {
  */
 function addMatchTypeChoiceSets(
   relatedNodeChoices: Map<string, string[][]>,
-  edges: GraphEdge[]
+  edges: FlowchartEdge[]
 ): void {
   for (const edge of edges) {
     if (!edge.compoundCondition) continue;
@@ -694,14 +668,12 @@ function addMatchTypeChoiceSets(
  * @param edge エッジ
  * @param sourceNodeId エッジの元ノードID
  * @param relatedNodeChoices 関連ノードの選択肢マップ
- * @param sourceNodeChoiceLabels ソースノードの選択肢ラベルからIDへのマップ
  * @returns カバーされる組み合わせの配列
  */
 function getEdgeCoveredCombinations(
-  edge: GraphEdge,
+  edge: FlowchartEdge,
   sourceNodeId: string,
-  relatedNodeChoices: Map<string, string[][]>,
-  sourceNodeChoiceLabels: Map<string, string>
+  relatedNodeChoices: Map<string, string[][]>
 ): ChoiceCombination[] {
   const coveredCombinations: ChoiceCombination[] = [];
   const relatedNodeIds = Array.from(relatedNodeChoices.keys());
@@ -747,24 +719,11 @@ function getEdgeCoveredCombinations(
     const conditionsByNode = new Map<string, string[][]>();
 
     // ソースノードの条件を設定
+    // 構造化データ（condition.choiceIds）のみを参照し、ラベルは参照しない
     if (edge.condition?.choiceIds && edge.condition.choiceIds.length > 0) {
       conditionsByNode.set(sourceNodeId, edge.condition.choiceIds.map(choiceId => [choiceId]));
-    } else if (edge.label) {
-      // ラベルから選択肢を抽出
-      const matchedChoiceIds: string[] = [];
-      for (const [label, id] of sourceNodeChoiceLabels) {
-        if (edge.label.includes(label)) {
-          matchedChoiceIds.push(id);
-        }
-      }
-      if (matchedChoiceIds.length > 0) {
-        conditionsByNode.set(sourceNodeId, matchedChoiceIds.map(choiceId => [choiceId]));
-      } else {
-        // マッチしない場合はスキップ（カバーなし）
-        return [];
-      }
     } else {
-      // 条件もラベルもない場合はスキップ
+      // 構造化された条件がない場合はカバーなし扱い
       return [];
     }
 
@@ -791,13 +750,13 @@ function getEdgeCoveredCombinations(
  */
 export function checkCompoundConditionCoverage<T extends GraphNode>(
   nodes: T[],
-  edges: GraphEdge[]
+  edges: FlowchartEdge[]
 ): CompoundCoverageResult[] {
   const results: CompoundCoverageResult[] = [];
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
   // 各ノードをソースとするエッジをグループ化
-  const edgesBySource = new Map<string, GraphEdge[]>();
+  const edgesBySource = new Map<string, FlowchartEdge[]>();
   for (const edge of edges) {
     const existing = edgesBySource.get(edge.from) || [];
     existing.push(edge);
@@ -850,21 +809,13 @@ export function checkCompoundConditionCoverage<T extends GraphNode>(
     // matchType が all/exact の複合条件があれば組み合わせ候補に追加
     addMatchTypeChoiceSets(relatedNodeChoices, compoundConditionEdges);
 
-    // ソースノードの選択肢ラベルからIDへのマップを作成
-    const sourceNodeChoiceLabels = new Map<string, string>();
-    if (node.choices) {
-      for (const choice of node.choices) {
-        sourceNodeChoiceLabels.set(choice.label, choice.id);
-      }
-    }
-
     // 理論上の全組み合わせを生成
     const allCombinations = generateCartesianProduct(relatedNodeChoices);
 
     // 各エッジがカバーする組み合わせを計算
     const coveredKeys = new Set<string>();
     for (const edge of outgoingEdges) {
-      const coveredCombinations = getEdgeCoveredCombinations(edge, node.id, relatedNodeChoices, sourceNodeChoiceLabels);
+      const coveredCombinations = getEdgeCoveredCombinations(edge, node.id, relatedNodeChoices);
       for (const combination of coveredCombinations) {
         coveredKeys.add(combinationToKey(combination));
       }
