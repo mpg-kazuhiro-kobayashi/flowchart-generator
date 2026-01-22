@@ -1,10 +1,10 @@
 # Flowchart Generator
 
-📊 Next.js + Mermaid.jsによるインタラクティブなフローチャート生成ツール
+📊 Next.js + Mermaid.js によるインタラクティブなフローチャート生成ツール
 
 ## 概要
 
-JavaScript Objectから自動的にMermaidフローチャートを生成するビジュアルエディタです。ノードクリックによる条件分岐の追加、複合条件（AND条件）のサポート、設問カテゴリ（SA/MA/FA/NA）に対応した高度なフローチャート設計が可能です。
+JavaScript Object から自動的に Mermaid フローチャートを生成するビジュアルエディタです。ノードクリックによる条件分岐の追加、複合条件（AND条件）のサポート、設問カテゴリ（SA/MA/FA/NA）に対応した高度なフローチャート設計が可能です。
 
 ## 技術スタック
 
@@ -15,11 +15,10 @@ JavaScript Objectから自動的にMermaidフローチャートを生成する�
 
 ## 主要機能
 
-✅ **実装済み機能**
-
 ### 基本機能
-- JavaScript ObjectからMermaidフローチャートを自動生成
+- JavaScript Object から Mermaid フローチャートを自動生成
 - ノードクリックによるインタラクティブな条件追加
+- エッジクリックによる到達ルール編集
 - リアルタイムプレビュー表示
 - 多様なノード形状（14種類）とエッジスタイル（9種類）
 
@@ -30,41 +29,54 @@ JavaScript Objectから自動的にMermaidフローチャートを生成する�
 - **NA（数値入力）**: 数値入力（条件分岐可能）
 
 ### 複合条件機能
-- 複数の設問ノードの回答を組み合わせたAND条件
+- 複数の設問ノードの回答を組み合わせた AND 条件
 - 経路解析による適切な条件ノード提示
-- 状態ノードの自動生成と管理
-- SA/MA/NAの混合条件対応
+- SA/MA/NA の混合条件対応
 
-### その他
-- レスポンシブデザイン
-- TypeScript完全対応
-- エラーハンドリング
-- ID検証機能
+### 網羅性チェック
+- **選択肢網羅性（SA/MA）**: すべての選択肢がエッジで使用されているか検証
+- **数値ギャップ検出（NA）**: 数値範囲全体をカバーしているか検証
+- **複合条件組み合わせ網羅性**: 複数ノードの選択肢の組み合わせが網羅されているか検証
+
+### エッジ競合検出
+- **exact**: 完全に同じ条件の重複を検出
+- **partial**: 部分的に重複する条件を検出
+- **subset**: 一方がもう一方を包含する条件を検出
+
+### エッジラベル自動生成
+- 分岐条件（`visibilityCondition`）からラベルを自動生成
+- ユーザーによるラベル編集は不要
 
 ## ディレクトリ構成
 
 ```
-/src
-  /app
-    page.tsx                      # メインページ
-    layout.tsx                    # レイアウト
-  /components
-    FlowchartRenderer.tsx         # Mermaidフローチャート描画
-    NodeEditDialog.tsx            # ノード編集ダイアログ
-    EdgeEditDialog.tsx            # エッジ編集ダイアログ
-    AddConditionDialog.tsx        # 条件追加ダイアログ
-  /lib
-    flowchartGenerator.ts         # フローチャート生成ロジック
-    graphUtils.ts                 # グラフ解析ユーティリティ
-    validation.ts                 # バリデーション関数
-  /types
-    flowchart.ts                  # TypeScript型定義
-/docs
-  compound-condition.md           # 複合条件の実装仕様
-  compound-condition-path-analysis.md  # 経路解析の実装方針
-  node-deletion.md                # ノード削除機能の仕様
-  na-coverage-check.md            # NA網羅性チェックの実装仕様
-  refactoring-plan.md             # リファクタリング方針
+src/
+├── app/
+│   ├── page.tsx                    # メインページ
+│   └── layout.tsx                  # レイアウト
+├── components/
+│   ├── FlowchartRenderer.tsx       # Mermaid フローチャート描画
+│   ├── NodeEditDialog.tsx          # ノード編集ダイアログ
+│   ├── EntryRuleEditor.tsx         # 到達ルール編集フォーム
+│   ├── EntryRuleEditDialog.tsx     # エッジクリック時の編集ダイアログ
+│   └── Sidebar/
+│       ├── index.tsx               # サイドバーコンテナ
+│       └── NodeList.tsx            # ノード一覧・選択肢管理
+├── domain/                         # ビジネスロジック（フレームワーク非依存）
+│   ├── coverage.ts                 # 網羅性チェック、競合検出
+│   ├── numericRange.ts             # 数値範囲操作
+│   ├── graphAnalysis.ts            # 経路解析
+│   └── conditionFormatter.ts       # 条件フォーマット（ラベル自動生成）
+├── lib/
+│   ├── hooks/
+│   │   ├── useFlowchartState.ts    # フローチャート状態管理
+│   │   └── useDialogState.ts       # ダイアログ状態管理
+│   ├── flowchartGenerator.ts       # Mermaid コード生成
+│   └── uuid.ts                     # UUID 生成
+└── types/
+    └── flowchart.ts                # TypeScript 型定義
+
+docs/                               # 実装方針ドキュメント
 ```
 
 ## セットアップ・起動
@@ -89,42 +101,102 @@ npm run dev
 
 ### 基本操作
 
-1. **ノード編集**: 左パネルでノードのID、ラベル、形状を編集
-2. **設問タイプ設定**: ノードに設問カテゴリ（SA/MA/FA/NA）を設定
-3. **選択肢管理**: SA/MAノードの場合、選択肢ボタンから選択肢を追加・編集
-4. **エッジ編集**: 接続（エッジ）を手動で追加・編集
-5. **リアルタイムプレビュー**: 右パネルでMermaidフローチャートをリアルタイム確認
+1. **ノード追加**: サイドバーの「ノードを追加」ボタンでノードを追加
+2. **ノード編集**: サイドバーでノードのラベル、設問タイプを編集
+3. **選択肢管理**: SA/MA ノードの場合、選択肢を追加・編集・削除
+4. **到達ルール設定**: フローチャートのノードをクリックして到達ルールを設定
+5. **リアルタイムプレビュー**: 右パネルで Mermaid フローチャートをリアルタイム確認
 
-### ノードクリックによる条件追加
+### ノードクリックによる到達ルール設定
 
-1. **フローチャートのノードをクリック**: 右パネルのノードをクリックするとダイアログが開く
-2. **接続先を選択**: 既存ノードまたは新規ノード作成を選択
-3. **条件を設定**:
-   - **単一条件**: そのノードからの直接的な遷移条件
-   - **複合条件**: 複数の設問ノードの回答を組み合わせたAND条件
-4. **エッジスタイルとラベル**: 矢印のスタイルとラベルを設定
-5. **追加**: 条件が自動的にフローチャートに反映される
+1. **フローチャートのノードをクリック**: ノード編集ダイアログが開く
+2. **到達ルールタブを選択**: 「到達ルール」タブで接続を管理
+3. **新しいルールを追加**:
+   - 接続元ノードを選択
+   - 条件タイプを選択（無条件、選択肢、数値、複合条件、デフォルト）
+   - 条件の詳細を設定
+4. **保存**: ルールが自動的にフローチャートに反映される
+
+### エッジクリックによるルール編集
+
+1. **フローチャートのエッジラベルをクリック**: 到達ルール編集ダイアログが開く
+2. **条件を編集**: 分岐条件を変更
+3. **保存または削除**: 変更を保存、またはルールを削除
 
 ### 複合条件の使い方
 
-1. **条件対象ノード**: 経路上に2つ以上のSA/MA/NAノードがある場合に利用可能
-2. **複合条件を使用にチェック**: ダイアログで複合条件モードに切り替え
+1. **条件対象ノード**: 経路上に2つ以上の SA/MA/NA ノードがある場合に利用可能
+2. **複合条件タイプを選択**: 到達ルール編集で「複合条件」を選択
 3. **各ノードの条件を設定**:
-   - SA: 選択肢を1つ選択
-   - MA: 選択肢を複数選択
+   - SA/MA: 選択肢を選択
    - NA: 演算子（=, >, <, >=, <=）と数値を入力
-4. **状態ノードの自動生成**: システムが自動的に状態ノード（六角形）を生成し、条件を管理
+4. **ラベル自動生成**: 条件に基づいてエッジラベルが自動生成される
+
+## データモデル
+
+### 主要な型
+
+```typescript
+// ノード定義
+interface CustomNode {
+  id: string;
+  label: string;
+  shape: NodeShape;
+  questionCategory?: QuestionCategory;  // SA, MA, NA, FA
+  choices?: ChoiceOption[];
+  entryRules?: NodeEntryRule[];         // このノードへの到達ルール
+}
+
+// 到達ルール（エッジ情報をノードに埋め込み）
+interface NodeEntryRule {
+  id: string;
+  sourceNodeId: string;                 // 遷移元ノードID
+  style?: EdgeStyle;                    // solid, dashed, dotted
+  visibilityCondition?: NodeVisibilityCondition;
+}
+
+// 条件タイプ
+type NodeVisibilityCondition =
+  | { type: 'always' }                              // 無条件
+  | { type: 'choice'; choiceIds: string[] }         // 選択肢条件
+  | { type: 'numeric'; numeric: NumericCondition }  // 数値条件
+  | { type: 'compound'; compound: CompoundCondition } // 複合条件
+  | { type: 'default' };                            // デフォルト（else）
+```
+
+### データフロー
+
+```
+CustomNode[] (entryRules 形式)
+  ↓
+useFlowchartState
+  ├─ edges (動的生成: generateEdgesFromEntryRules)
+  ├─ coverageResults (網羅性チェック結果)
+  ├─ conflictMap (競合検出結果)
+  └─ compoundCoverageMap (複合条件網羅性)
+  ↓
+FlowchartGenerator.generate()
+  ↓
+mermaidCode (文字列)
+  ↓
+FlowchartRenderer (SVG 描画)
+```
 
 ## 核心技術実装
 
 ### フローチャート生成
 
 ```typescript
-// FlowchartGenerator.ts
+// flowchartGenerator.ts
 export class FlowchartGenerator {
   static generate(definition: FlowchartDefinition): string {
-    // JavaScript ObjectからMermaidコードを生成
+    // CustomNode[] から Mermaid コードを生成
     return `flowchart ${definition.direction}\n${nodes}\n${edges}`;
+  }
+
+  static generateEdgesFromEntryRules(nodes: CustomNode[]): FlowchartEdge[] {
+    // 各ノードの entryRules からエッジを動的生成
+    // ラベルは visibilityCondition から自動生成
   }
 }
 ```
@@ -132,7 +204,7 @@ export class FlowchartGenerator {
 ### 経路解析アルゴリズム
 
 ```typescript
-// graphUtils.ts
+// domain/graphAnalysis.ts
 export function getReachableQuestionNodes<T extends GraphNode>(
   targetNodeId: string,
   nodes: T[],
@@ -143,34 +215,57 @@ export function getReachableQuestionNodes<T extends GraphNode>(
 }
 ```
 
-### 複合条件の状態管理
+### 網羅性チェック
 
 ```typescript
-// page.tsx
-const handleAddCondition = (result: AddConditionResult) => {
-  if (result.compoundCondition) {
-    // 状態ノードを自動生成
-    const stateNodeId = generateStateNodeId(result.compoundCondition.conditions);
+// domain/coverage.ts
+export function checkChoiceCoverage(nodes, edges): CoverageResult[] {
+  // SA/MA: すべての選択肢がエッジで使用されているか
+  // NA: 数値条件が全範囲をカバーしているか
+}
 
-    // 選択したノードから状態ノードへのエッジを作成
-    // 状態ノードから接続先へのエッジを作成
-  }
-};
+export function checkCompoundConditionCoverage(nodes, edges): CompoundCoverageResult[] {
+  // 複合条件の組み合わせ網羅性をチェック
+}
+
+export function checkEdgeConditionConflicts(nodes, edges): ConflictResult[] {
+  // エッジ条件の競合を検出
+}
+```
+
+### 条件フォーマット（ラベル自動生成）
+
+```typescript
+// domain/conditionFormatter.ts
+export function formatCondition(
+  condition: NodeVisibilityCondition,
+  sourceNodeId: string,
+  resolver: ConditionLabelResolver
+): string {
+  // visibilityCondition を人間が読める文字列に変換
+  // 例: "選択肢1, 選択肢2" や ">= 100" や "Node1: 選択肢A AND Node2: >= 50"
+}
 ```
 
 ## 技術的特徴
+
+### entryRules ベースのデータモデル
+- 各ノードが「どの条件で表示されるか」を `entryRules` として保持
+- エッジ配列は動的に生成され、直接管理しない
+- データの一貫性が保たれ、管理が容易
 
 ### 経路解析による複合条件
 - グラフの逆方向探索により、選択したノードに到達可能な設問ノードのみを提示
 - 不要な条件選択を排除し、ユーザビリティを向上
 
-### 状態ノードパターン
-- 複合条件を状態ノード（`_state_` プレフィックス）で表現
-- 同一条件の状態ノードは再利用され、グラフの複雑化を防止
+### ラベル自動生成
+- `visibilityCondition` から `conditionFormatter.ts` でラベルを自動生成
+- ユーザーが条件と異なるラベルを入力する不整合を防止
+- 条件変更時にラベルが自動更新
 
-### TypeScript型システム
+### TypeScript 型システム
 - 完全な型定義により、コンパイル時エラー検出
-- FlowchartDefinition型によるデータ構造の明確化
+- `CustomNode` / `NodeEntryRule` / `NodeVisibilityCondition` によるデータ構造の明確化
 
 ## 開発・デプロイ
 
@@ -192,58 +287,31 @@ npm run start
 npm run lint
 ```
 
-### GitHub Pagesデプロイ
+### GitHub Pages デプロイ
 
-このプロジェクトはGitHub Pagesに静的サイトとしてデプロイされています。
+このプロジェクトは GitHub Pages に静的サイトとしてデプロイできます。
 
 ```bash
-# 静的エクスポートとデプロイ
 npm run build
 ```
 
 デプロイ設定は `next.config.ts` と `.github/workflows/` を参照してください。
 
-## プロジェクトの技術的課題と解決策
-
-このプロジェクトは以下の技術課題を解決しています：
-
-### 1. 複合条件の経路解析
-
-**課題**: フローチャート全体で条件ノードが複数存在する場合、どのノードからでも複合条件が選択可能になってしまう
-
-**解決策**: 深さ優先探索（DFS）による逆方向グラフ探索アルゴリズムを実装し、選択したノードに到達するまでの経路上にある設問ノードのみを提示
-- 実装: `src/lib/graphUtils.ts` の `getReachableQuestionNodes`
-- 詳細: `docs/compound-condition-path-analysis.md`
-
-### 2. 複合条件のエッジ生成
-
-**課題**: すべての条件ノードから状態ノードへのエッジを作成すると、誤った経路が生成される
-
-**解決策**: 選択したノード（最後の設問ノード）から状態ノードへのエッジのみを作成し、エッジラベルにすべての複合条件を含める
-- 実装: `src/app/page.tsx` の `handleAddCondition`
-- 詳細: `docs/compound-condition-path-analysis.md`
-
-### 3. 状態ノードの管理
-
-**課題**: 複合条件を表現するための中間ノードの管理
-
-**解決策**: `_state_` プレフィックスを持つ状態ノードを自動生成し、同一条件の状態ノードは再利用
-- 六角形で視覚的に区別
-- サイドパネルには表示しない
-- 複合条件のメタデータを保持
-
-### 4. Mermaidクリックイベントの取得
-
-**課題**: Mermaid.jsで生成されたSVGノードからのクリックイベント取得
-
-**解決策**: レンダリング後にSVG要素にイベントリスナーを動的に追加
-- 実装: `src/components/FlowchartRenderer.tsx`
-
 ## ドキュメント
 
-- `docs/compound-condition.md`: 複合条件機能の実装仕様
-- `docs/compound-condition-path-analysis.md`: 経路解析の実装方針と修正履歴
-- `docs/node-deletion.md`: ノード削除機能の仕様
+詳細な実装方針は `docs/` ディレクトリを参照してください。
+
+- [docs/README.md](./docs/README.md) - 実装方針ドキュメントの一覧と現在の実装状況
+
+### 主要ドキュメント
+
+| ドキュメント | 概要 |
+|-------------|------|
+| [node-embedded-conditions.md](./docs/node-embedded-conditions.md) | entryRules ベースの新データモデル |
+| [compound-condition.md](./docs/compound-condition.md) | 複合条件（AND条件）の実装 |
+| [auto-edge-label.md](./docs/auto-edge-label.md) | エッジラベル自動生成 |
+| [edge-condition-conflict.md](./docs/edge-condition-conflict.md) | エッジ競合検出 |
+| [compound-condition-coverage.md](./docs/compound-condition-coverage.md) | 複合条件の組み合わせ網羅性チェック |
 
 ## ライセンス
 
