@@ -349,7 +349,6 @@ export default function Home() {
           onAddChoice={handleAddChoice}
           onRemoveChoice={handleRemoveChoice}
           onUpdateChoice={handleUpdateChoice}
-          edges={customEdges}
           mermaidCode={mermaidCode}
         />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { CustomNode, FlowchartEdge } from '@/types/flowchart';
+import { CustomNode } from '@/types/flowchart';
 import { CoverageResult, EdgeConflict, CompoundCoverageResult } from '@/domain/coverage';
 import NodeList from './NodeList';
 
@@ -18,8 +18,6 @@ interface SidebarProps {
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
   onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
-  // エッジ関連（動的生成されたもの）
-  edges: FlowchartEdge[];
   // デバッグ表示
   mermaidCode: string;
 }
@@ -37,7 +35,6 @@ export default function Sidebar({
   onAddChoice,
   onRemoveChoice,
   onUpdateChoice,
-  edges,
   mermaidCode,
 }: SidebarProps) {
   return (
@@ -65,25 +62,6 @@ export default function Sidebar({
           onRemoveChoice={onRemoveChoice}
           onUpdateChoice={onUpdateChoice}
         />
-
-        {/* エッジ一覧（読み取り専用） */}
-        {edges.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 text-gray-900">エッジ一覧（entryRules から生成）</h3>
-            <div className="space-y-2">
-              {edges.map((edge, index) => (
-                <div key={index} className="p-2 bg-gray-50 rounded border border-gray-200 text-sm">
-                  <span className="font-mono text-gray-600">{edge.from}</span>
-                  <span className="mx-2 text-gray-400">→</span>
-                  <span className="font-mono text-gray-600">{edge.to}</span>
-                  {edge.label && (
-                    <span className="ml-2 text-gray-500">({edge.label})</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Object定義表示 */}
