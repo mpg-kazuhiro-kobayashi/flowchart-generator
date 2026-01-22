@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import FlowchartRenderer, { EdgeClickInfo, ConflictingEdgeInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
+import EntryRuleEditDialog from '@/components/EntryRuleEditDialog';
+import { ConditionNode } from '@/components/EntryRuleEditor';
 import Sidebar from '@/components/Sidebar';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
 import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
@@ -11,6 +13,7 @@ import { useDialogState } from '@/lib/hooks/useDialogState';
 import {
   FlowchartDefinition,
   CustomNode,
+  FlowchartNode,
   NodeEntryRule,
 } from '@/types/flowchart';
 
@@ -164,6 +167,13 @@ export default function Home() {
     closeNodeDialog,
   } = dialogState;
 
+  // エッジクリック時の到達ルール編集ダイアログ状態
+  const [entryRuleDialogInfo, setEntryRuleDialogInfo] = useState<{
+    targetNodeId: string;
+    targetNodeLabel: string;
+    rule: NodeEntryRule;
+  } | null>(null);
+
   // フローチャート定義
   const currentDefinition = useMemo((): FlowchartDefinition => {
     return {
@@ -220,17 +230,27 @@ export default function Home() {
     }
   }, [currentDefinition.nodes, customNodes, customEdges, openNodeDialog]);
 
-  // エッジクリック時のハンドラ（エッジをクリックすると対象ノードのダイアログを開く）
+  // エッジクリック時のハンドラ（エッジのラベルをクリックすると到達ルール編集ダイアログを開く）
   const handleEdgeClick = useCallback((edgeInfo: EdgeClickInfo) => {
-    // エッジの to ノードを見つけてダイアログを開く
-    if (edgeInfo.toNodeId) {
-      const node = customNodes.find(n => n.id === edgeInfo.toNodeId);
-      if (node) {
-        const reachableNodes = getReachableQuestionNodes(node.id, customNodes, customEdges);
-        openNodeDialog(node, reachableNodes);
-      }
+    if (!edgeInfo.toNodeId || !edgeInfo.fromNodeId) return;
+
+    // toNode を見つける
+    const toNode = customNodes.find(n => n.id === edgeInfo.toNodeId);
+    if (!toNode || !toNode.entryRules) return;
+
+    // fromNodeId とラベルから該当するルールを特定
+    const rule = toNode.entryRules.find(r =>
+      r.sourceNodeId === edgeInfo.fromNodeId && r.label === edgeInfo.label
+    );
+
+    if (rule) {
+      setEntryRuleDialogInfo({
+        targetNodeId: toNode.id,
+        targetNodeLabel: toNode.label,
+        rule,
+      });
     }
-  }, [customNodes, customEdges, openNodeDialog]);
+  }, [customNodes]);
 
   // ノード更新のハンドラ（ダイアログから）
   const handleUpdateNode = useCallback((nodeId: string, update: NodeUpdateResult) => {
@@ -263,6 +283,36 @@ export default function Home() {
     addEntryRule(nodeId, rule);
     closeNodeDialog();
   }, [addEntryRule, closeNodeDialog]);
+
+  // エッジクリック用の conditionNodes を取得（対象ノードから到達可能な設問ノード）
+  const entryRuleDialogConditionNodes = useMemo((): ConditionNode[] => {
+    if (!entryRuleDialogInfo) return [];
+    const reachableNodes = getReachableQuestionNodes(entryRuleDialogInfo.targetNodeId, customNodes, customEdges);
+    return reachableNodes;
+  }, [entryRuleDialogInfo, customNodes, customEdges]);
+
+  // エッジクリック用の availableNodes（対象ノード自身を除く）
+  const entryRuleDialogAvailableNodes = useMemo((): FlowchartNode[] => {
+    if (!entryRuleDialogInfo) return [];
+    return customNodes.filter(n => n.id !== entryRuleDialogInfo.targetNodeId);
+  }, [entryRuleDialogInfo, customNodes]);
+
+  // 到達ルール編集ダイアログを閉じる
+  const closeEntryRuleDialog = useCallback(() => {
+    setEntryRuleDialogInfo(null);
+  }, []);
+
+  // 到達ルール編集ダイアログからの更新ハンドラ
+  const handleEntryRuleDialogUpdate = useCallback((nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => {
+    updateEntryRule(nodeId, ruleId, updates);
+    closeEntryRuleDialog();
+  }, [updateEntryRule, closeEntryRuleDialog]);
+
+  // 到達ルール編集ダイアログからの削除ハンドラ
+  const handleEntryRuleDialogDelete = useCallback((nodeId: string, ruleId: string) => {
+    removeEntryRule(nodeId, ruleId);
+    closeEntryRuleDialog();
+  }, [removeEntryRule, closeEntryRuleDialog]);
 
   // ========== レンダリング ==========
 
@@ -345,6 +395,19 @@ export default function Home() {
           } as CoverageInfo;
         })() : undefined}
         edgeConflicts={selectedSourceNode ? conflictMap.get(selectedSourceNode.id) : undefined}
+      />
+
+      {/* 到達ルール編集ダイアログ（エッジクリック時） */}
+      <EntryRuleEditDialog
+        isOpen={entryRuleDialogInfo !== null}
+        onClose={closeEntryRuleDialog}
+        targetNodeId={entryRuleDialogInfo?.targetNodeId ?? ''}
+        targetNodeLabel={entryRuleDialogInfo?.targetNodeLabel ?? ''}
+        rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', label: '', style: 'solid', visibilityCondition: { type: 'always' } }}
+        availableNodes={entryRuleDialogAvailableNodes}
+        conditionNodes={entryRuleDialogConditionNodes}
+        onUpdateRule={handleEntryRuleDialogUpdate}
+        onDeleteRule={handleEntryRuleDialogDelete}
       />
     </div>
   );

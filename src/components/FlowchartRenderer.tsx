@@ -62,23 +62,21 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
 
   // エッジIDからfrom/toノードIDを抽出
   const extractEdgeNodeIds = useCallback((edgeElement: Element): { from?: string; to?: string } => {
-    // MermaidのエッジIDは形式: L-A-B-0 (A→Bのエッジ)
-    // ノードIDに_が含まれる場合もある: L-B-_state_xxx-0
+    // MermaidのエッジIDは形式: L_A_B_0 (A→Bのエッジ) - アンダースコア区切り
     const id = edgeElement.id || '';
 
-    // 形式: L-{from}-{to}-{数字} の最後の数字部分を除去
-    const withoutIndex = id.replace(/-\d+$/, '');
+    // 形式: L_{from}_{to}_{数字} の最後の数字部分を除去
+    const withoutIndex = id.replace(/_\d+$/, '');
 
-    // L- プレフィックスを除去
-    const withoutPrefix = withoutIndex.replace(/^L-/, '');
+    // L_ プレフィックスを除去
+    const withoutPrefix = withoutIndex.replace(/^L_/, '');
 
-    // 残りの部分を最初の - で分割（ただし、_state_ で始まるノードIDに注意）
-    // 戦略: ノードIDに - が含まれないと仮定して、最初の - で分割
-    const parts = withoutPrefix.split('-');
+    // 残りの部分をアンダースコアで分割
+    const parts = withoutPrefix.split('_');
     if (parts.length >= 2) {
       // 最初の部分がfrom、残りがto
       const from = parts[0];
-      const to = parts.slice(1).join('-');
+      const to = parts.slice(1).join('_');
       return { from, to };
     }
     return {};
@@ -177,10 +175,19 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
   const addEdgeClickEventListeners = useCallback(() => {
     if (!containerRef.current || !onEdgeClick) return;
 
-    // SVG内のすべてのエッジ（パスとラベル）にクリックイベントを追加
-    // Mermaidはエッジを .edgePath クラスで描画し、ラベルは .edgeLabel クラス
-    const edgePaths = containerRef.current.querySelectorAll('.edgePath');
-    const edgeLabels = containerRef.current.querySelectorAll('.edgeLabel');
+    // Mermaid v10+ では g.edgePaths 内に path 要素が直接ある
+    const edgePathsGroup = containerRef.current.querySelector('g.edgePaths');
+    const edgeLabelsGroup = containerRef.current.querySelector('g.edgeLabels');
+
+    // path 要素を取得（flowchart-link クラスを持つもの）
+    const edgePaths = edgePathsGroup
+      ? edgePathsGroup.querySelectorAll('path.flowchart-link')
+      : containerRef.current.querySelectorAll('.edgePath');
+
+    // ラベルを取得（edgeLabel クラスを持つ要素）
+    const edgeLabels = edgeLabelsGroup
+      ? edgeLabelsGroup.querySelectorAll('.edgeLabel')
+      : containerRef.current.querySelectorAll('.edgeLabel');
 
     // エッジパスにクリックイベントを追加
     edgePaths.forEach((edgePath, index) => {
@@ -192,8 +199,9 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
         event.preventDefault();
         event.stopPropagation();
 
-        // 対応するラベルを取得
-        const labelElement = edgeLabels[index];
+        // 対応するラベルを取得（ラベルは2つずつあるので index でマッピング）
+        // Mermaid v10+ ではラベルが重複している場合がある
+        const labelElement = edgeLabels[index * 2] || edgeLabels[index];
         const label = labelElement?.textContent?.trim() || undefined;
 
         // from/toノードIDを抽出
@@ -206,7 +214,16 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
     });
 
     // エッジラベルにもクリックイベントを追加
-    edgeLabels.forEach((edgeLabel, index) => {
+    // Mermaid v10+ ではラベルが2つずつ重複している（背景用と表示用）
+    const uniqueLabels: Element[] = [];
+    edgeLabels.forEach((label, index) => {
+      // 偶数インデックスのラベルのみ処理（重複を除去）
+      if (index % 2 === 0) {
+        uniqueLabels.push(label);
+      }
+    });
+
+    uniqueLabels.forEach((edgeLabel, index) => {
       const labelElement = edgeLabel as HTMLElement;
       if (labelElement.dataset.edgeClickAdded === 'true') return;
       labelElement.dataset.edgeClickAdded = 'true';
