@@ -1,7 +1,7 @@
 'use client';
 
-import { FlowchartNode, NodeEntryRule } from '@/types/flowchart';
-import EntryRuleEditor, { ConditionNode } from './EntryRuleEditor';
+import { FlowchartNode, FlowchartEdge, NodeEntryRule } from '@/types/flowchart';
+import EntryRuleEditor from './EntryRuleEditor';
 
 interface EntryRuleEditDialogProps {
   isOpen: boolean;
@@ -14,8 +14,10 @@ interface EntryRuleEditDialogProps {
   rule: NodeEntryRule;
   /** 選択可能なノード一覧 */
   availableNodes: FlowchartNode[];
-  /** 条件設定に使える設問ノード一覧 */
-  conditionNodes: ConditionNode[];
+  /** 全ノード一覧（経路解析用） */
+  allNodes: FlowchartNode[];
+  /** 全エッジ一覧（経路解析用） */
+  allEdges: FlowchartEdge[];
   /** ルール更新コールバック */
   onUpdateRule: (nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => void;
   /** ルール削除コールバック */
@@ -29,7 +31,8 @@ export default function EntryRuleEditDialog({
   targetNodeLabel,
   rule,
   availableNodes,
-  conditionNodes,
+  allNodes,
+  allEdges,
   onUpdateRule,
   onDeleteRule,
 }: EntryRuleEditDialogProps) {
@@ -71,7 +74,8 @@ export default function EntryRuleEditDialog({
             initialRule={rule}
             targetNodeId={targetNodeId}
             availableNodes={availableNodes}
-            conditionNodes={conditionNodes}
+            allNodes={allNodes}
+            allEdges={allEdges}
             onSave={handleSave}
             onCancel={onClose}
           />

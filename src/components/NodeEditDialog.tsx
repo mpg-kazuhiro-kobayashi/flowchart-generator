@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, ChoiceOption, QuestionCategory, NodeEntryRule } from '@/types/flowchart';
+import { FlowchartNode, FlowchartEdge, ChoiceOption, QuestionCategory, NodeEntryRule } from '@/types/flowchart';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
 import { EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
-import EntryRuleEditor, { ConditionNode } from './EntryRuleEditor';
+import EntryRuleEditor from './EntryRuleEditor';
 
 // 設問カテゴリオプション
 const questionCategories: { value: QuestionCategory | ''; label: string; description: string }[] = [
@@ -39,7 +39,10 @@ interface NodeEditDialogProps {
   onClose: () => void;
   sourceNode: (FlowchartNode & { questionCategory?: QuestionCategory; choices?: ChoiceOption[]; entryRules?: NodeEntryRule[] }) | null;
   availableNodes: FlowchartNode[];
-  conditionNodes?: ConditionNode[];
+  /** 全ノード一覧（経路解析用） */
+  allNodes: FlowchartNode[];
+  /** 全エッジ一覧（経路解析用） */
+  allEdges: FlowchartEdge[];
   onUpdateNode: (nodeId: string, update: NodeUpdateResult) => void;
   onDeleteNode?: (nodeId: string) => void;
   onAddEntryRule?: (nodeId: string, rule: Omit<NodeEntryRule, 'id'>) => void;
@@ -58,7 +61,8 @@ export default function NodeEditDialog({
   onClose,
   sourceNode,
   availableNodes,
-  conditionNodes = [],
+  allNodes,
+  allEdges,
   onUpdateNode,
   onDeleteNode,
   onAddEntryRule,
@@ -435,7 +439,8 @@ export default function NodeEditDialog({
                           initialRule={editingRule}
                           targetNodeId={sourceNode.id}
                           availableNodes={availableNodes}
-                          conditionNodes={conditionNodes}
+                          allNodes={allNodes}
+                          allEdges={allEdges}
                           onSave={handleUpdateEntryRule}
                           onCancel={() => setEditingRuleId(null)}
                         />
@@ -491,7 +496,8 @@ export default function NodeEditDialog({
                   mode="add"
                   targetNodeId={sourceNode.id}
                   availableNodes={availableNodes}
-                  conditionNodes={conditionNodes}
+                  allNodes={allNodes}
+                  allEdges={allEdges}
                   onSave={handleAddEntryRule}
                   onCancel={() => setIsAddingRule(false)}
                 />

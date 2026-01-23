@@ -4,10 +4,8 @@ import { useMemo, useCallback, useState } from 'react';
 import FlowchartRenderer, { EdgeClickInfo, ConflictingEdgeInfo } from '@/components/FlowchartRenderer';
 import NodeEditDialog, { NodeUpdateResult, CoverageInfo } from '@/components/NodeEditDialog';
 import EntryRuleEditDialog from '@/components/EntryRuleEditDialog';
-import { ConditionNode } from '@/components/EntryRuleEditor';
 import Sidebar from '@/components/Sidebar';
 import { FlowchartGenerator } from '@/lib/flowchartGenerator';
-import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
 import { useFlowchartState } from '@/lib/hooks/useFlowchartState';
 import { useDialogState } from '@/lib/hooks/useDialogState';
 import {
@@ -158,7 +156,6 @@ export default function Home() {
   const {
     isNodeDialogOpen,
     selectedSourceNode,
-    reachableConditionNodes,
     openNodeDialog,
     closeNodeDialog,
   } = dialogState;
@@ -221,10 +218,9 @@ export default function Home() {
     }
 
     if (node) {
-      const reachableNodes = getReachableQuestionNodes(node.id, customNodes, customEdges);
-      openNodeDialog(node, reachableNodes);
+      openNodeDialog(node);
     }
-  }, [currentDefinition.nodes, customNodes, customEdges, openNodeDialog]);
+  }, [currentDefinition.nodes, openNodeDialog]);
 
   // エッジクリック時のハンドラ（エッジのラベルをクリックすると到達ルール編集ダイアログを開く）
   const handleEdgeClick = useCallback((edgeInfo: EdgeClickInfo) => {
@@ -289,13 +285,6 @@ export default function Home() {
     addEntryRule(nodeId, rule);
     closeNodeDialog();
   }, [addEntryRule, closeNodeDialog]);
-
-  // エッジクリック用の conditionNodes を取得（対象ノードから到達可能な設問ノード）
-  const entryRuleDialogConditionNodes = useMemo((): ConditionNode[] => {
-    if (!entryRuleDialogInfo) return [];
-    const reachableNodes = getReachableQuestionNodes(entryRuleDialogInfo.targetNodeId, customNodes, customEdges);
-    return reachableNodes;
-  }, [entryRuleDialogInfo, customNodes, customEdges]);
 
   // エッジクリック用の availableNodes（対象ノード自身を除く）
   const entryRuleDialogAvailableNodes = useMemo((): FlowchartNode[] => {
@@ -381,7 +370,8 @@ export default function Home() {
           entryRules: customNodes.find(n => n.id === selectedSourceNode.id)?.entryRules,
         } : null}
         availableNodes={currentDefinition.nodes}
-        conditionNodes={reachableConditionNodes}
+        allNodes={customNodes}
+        allEdges={customEdges}
         onUpdateNode={handleUpdateNode}
         onDeleteNode={handleDeleteNode}
         onAddEntryRule={handleAddEntryRule}
@@ -410,7 +400,8 @@ export default function Home() {
         targetNodeLabel={entryRuleDialogInfo?.targetNodeLabel ?? ''}
         rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', style: 'solid', visibilityCondition: { type: 'always' } }}
         availableNodes={entryRuleDialogAvailableNodes}
-        conditionNodes={entryRuleDialogConditionNodes}
+        allNodes={customNodes}
+        allEdges={customEdges}
         onUpdateRule={handleEntryRuleDialogUpdate}
         onDeleteRule={handleEntryRuleDialogDelete}
       />

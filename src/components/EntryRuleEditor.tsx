@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   FlowchartNode,
+  FlowchartEdge,
   EdgeStyle,
   NumericOperator,
   ChoiceOption,
@@ -11,6 +12,7 @@ import {
   NodeVisibilityCondition,
   SingleCondition,
 } from '@/types/flowchart';
+import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -40,8 +42,10 @@ export interface EntryRuleEditorProps {
   targetNodeId: string;
   /** 選択可能なノード一覧 */
   availableNodes: FlowchartNode[];
-  /** 条件設定に使える設問ノード一覧 */
-  conditionNodes: ConditionNode[];
+  /** 全ノード一覧（経路解析用） */
+  allNodes: FlowchartNode[];
+  /** 全エッジ一覧（経路解析用） */
+  allEdges: FlowchartEdge[];
   /** 保存コールバック */
   onSave: (rule: Omit<NodeEntryRule, 'id'>) => void;
   /** キャンセルコールバック */
@@ -53,7 +57,8 @@ export default function EntryRuleEditor({
   initialRule,
   targetNodeId,
   availableNodes,
-  conditionNodes,
+  allNodes,
+  allEdges,
   onSave,
   onCancel,
 }: EntryRuleEditorProps) {
@@ -127,9 +132,36 @@ export default function EntryRuleEditor({
   }, [mode, initialRule, selectableNodes]);
 
   // 選択されたソースノードの情報
-  const selectedSourceConditionNode = conditionNodes.find(n => n.id === sourceNodeId);
-  const sourceHasChoices = selectedSourceConditionNode?.choices && selectedSourceConditionNode.choices.length > 0;
-  const sourceIsNumeric = selectedSourceConditionNode?.questionCategory === 'NA';
+  // 接続元ノードの情報は availableNodes から取得（選択肢・数値条件の判定用）
+  const selectedSourceNode = availableNodes.find(n => n.id === sourceNodeId);
+  const sourceHasChoices = selectedSourceNode?.choices && selectedSourceNode.choices.length > 0;
+  const sourceIsNumeric = selectedSourceNode?.questionCategory === 'NA';
+
+  // 複合条件に使用できるノード（接続元ノードから逆方向に辿れる設問ノード + 接続元ノード自身）
+  // sourceNodeId が変更されるたびに再計算
+  const conditionNodes = useMemo((): ConditionNode[] => {
+    if (!sourceNodeId) return [];
+
+    // 接続元ノードから逆方向に辿れる設問ノードを取得
+    const reachableNodes = getReachableQuestionNodes(sourceNodeId, allNodes, allEdges);
+
+    // 接続元ノード自身が設問ノードの場合は追加
+    const sourceNode = allNodes.find(n => n.id === sourceNodeId);
+    if (sourceNode && sourceNode.questionCategory && sourceNode.questionCategory !== 'FA') {
+      // 既に含まれていない場合のみ追加
+      const alreadyIncluded = reachableNodes.some(n => n.id === sourceNodeId);
+      if (!alreadyIncluded) {
+        reachableNodes.push(sourceNode);
+      }
+    }
+
+    return reachableNodes.map(node => ({
+      id: node.id,
+      label: node.label,
+      questionCategory: node.questionCategory,
+      choices: node.choices,
+    }));
+  }, [sourceNodeId, allNodes, allEdges]);
 
   // 複合条件を更新
   const updateCompoundCondition = (nodeId: string, condition: SingleCondition | null) => {
@@ -268,19 +300,20 @@ export default function EntryRuleEditor({
           <option value="always">無条件</option>
           {sourceHasChoices && <option value="choice">選択肢条件</option>}
           {sourceIsNumeric && <option value="numeric">数値条件</option>}
-          {conditionNodes.length >= 1 && <option value="compound">複合条件</option>}
+          {/* 複合条件は経路上に2つ以上の設問ノードがある場合のみ表示 */}
+          {conditionNodes.length >= 2 && <option value="compound">複合条件</option>}
           <option value="default">デフォルト（その他）</option>
         </select>
       </div>
 
       {/* 選択肢条件 */}
-      {conditionType === 'choice' && selectedSourceConditionNode?.choices && (
+      {conditionType === 'choice' && selectedSourceNode?.choices && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             選択肢（複数選択可）
           </label>
           <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg border border-gray-200">
-            {selectedSourceConditionNode.choices.map(choice => (
+            {selectedSourceNode.choices.map(choice => (
               <button
                 key={choice.id}
                 type="button"
