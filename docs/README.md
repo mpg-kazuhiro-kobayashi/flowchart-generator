@@ -7,10 +7,10 @@
 | カテゴリ | 完了 | 未実装 |
 |---------|------|--------|
 | データモデル | 3 | 0 |
-| 網羅性チェック | 3 | 0 |
+| 網羅性チェック | 4 | 0 |
 | UI/UX | 3 | 0 |
 | リファクタリング | 3 | 0 |
-| 将来機能 | 0 | 2 |
+| 将来機能 | 0 | 1 |
 
 ---
 
@@ -32,6 +32,7 @@
 | [compound-condition-coverage.md](./compound-condition-coverage.md) | ✅ 完了 | 複合条件の組み合わせ網羅性チェック |
 | [edge-condition-conflict.md](./edge-condition-conflict.md) | ✅ 完了 | エッジ条件の競合検出（exact/partial/subset） |
 | [remove-label-based-coverage.md](./remove-label-based-coverage.md) | ✅ 完了 | ラベル非依存の網羅性チェック |
+| [default-edge.md](./default-edge.md) | ✅ 完了 | デフォルトエッジ（フォールバック分岐） |
 
 ### UI/UX
 
@@ -49,11 +50,10 @@
 | [refactoring-plan.md](./refactoring-plan.md) | ✅ 完了 | page.tsx の分割、カスタムフック抽出 |
 | [refactoring-phase2.md](./refactoring-phase2.md) | ✅ 完了 | domain/ 配下へのビジネスロジック分離 |
 
-### 将来機能（未実装）
+### 将来機能
 
 | ドキュメント | 状況 | 概要 |
 |-------------|------|------|
-| [default-edge.md](./default-edge.md) | ⏳ 未実装 | デフォルトエッジ（フォールバック分岐） |
 | [matrix-question-type.md](./matrix-question-type.md) | 🚫 見送り | マトリクス設問（SAMT/MAMT） |
 
 ---
@@ -165,7 +165,7 @@ FlowchartRenderer (SVG 描画)
 | choice | `選択肢1, 選択肢2` |
 | numeric | `>= 100` |
 | compound | `Node1: 選択肢A AND Node2: >= 50` |
-| default | `その他` |
+| default | `条件なし` |
 
 ---
 

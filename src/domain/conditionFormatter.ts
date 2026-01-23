@@ -37,7 +37,7 @@ export function formatCondition(
       return '';
 
     case 'default':
-      return 'その他';
+      return '条件なし';
 
     case 'choice': {
       const labels = resolver.getChoiceLabels(sourceNodeId, condition.choiceIds);

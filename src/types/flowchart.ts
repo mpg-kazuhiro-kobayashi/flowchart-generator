@@ -108,6 +108,8 @@ export interface FlowchartNode {
   questionCategory?: QuestionCategory;
   /** 選択肢（SA/MAの場合） */
   choices?: ChoiceOption[];
+  /** このノードが表示される経路を表すルール（網羅性チェック用） */
+  entryRules?: NodeEntryRule[];
 }
 
 /** エッジの分岐条件 */

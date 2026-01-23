@@ -17,47 +17,64 @@ MA（複数選択）の設問で選択肢が多い場合、すべての組み合
 
 ---
 
+## 現在の実装状況
+
+### 実装済み
+
+#### 1. 型定義（`src/types/flowchart.ts`）
+
+`NodeVisibilityCondition` に `type: 'default'` が定義済み：
+
+```typescript
+export type NodeVisibilityCondition =
+  | { type: 'always' }
+  | { type: 'choice'; choiceIds: string[] }
+  | { type: 'numeric'; numeric: NumericCondition }
+  | { type: 'compound'; compound: CompoundCondition }
+  | { type: 'default' };  // ← 実装済み
+```
+
+#### 2. UI（`src/components/EntryRuleEditor.tsx`）
+
+条件タイプの選択肢に「デフォルト（その他）」が追加済み：
+
+```typescript
+<option value="default">デフォルト（その他）</option>
+```
+
+デフォルト条件の設定・編集が可能。
+
+#### 3. ラベル自動生成（`src/domain/conditionFormatter.ts`）
+
+デフォルト条件のラベル「その他」が生成される：
+
+```typescript
+case 'default':
+  return 'その他';
+```
+
+### 未実装
+
+#### 1. 網羅性チェックでのデフォルトエッジ考慮
+
+現在の `checkChoiceCoverage`（`src/domain/coverage.ts`）はデフォルトエッジを考慮していない。
+
+#### 2. デフォルトエッジの制約バリデーション
+
+- 同一ソースノードから複数のデフォルトエッジを防ぐ制約
+
+---
+
 ## 設計方針
 
-### 1. データ構造の変更
-
-#### EdgeCondition の拡張
-
-```typescript
-/** エッジの分岐条件 */
-export interface EdgeCondition {
-  /** 選択肢IDによる条件（SA/MA用） */
-  choiceIds?: string[];
-  /** 数値条件（NA用） */
-  numericCondition?: NumericCondition;
-  /** デフォルトエッジフラグ */
-  isDefault?: boolean;
-}
-```
-
-#### CustomEdge の拡張
-
-```typescript
-/** カスタムエッジ（エディタ用） */
-export interface CustomEdge {
-  from: string;
-  to: string;
-  label: string;
-  style: EdgeStyle;
-  condition?: EdgeCondition;
-  /** デフォルトエッジかどうか */
-  isDefault?: boolean;
-}
-```
-
-### 2. デフォルトエッジの制約
+### 1. デフォルトエッジの制約
 
 1. **1ノードにつき1つまで**: 同一の設問ノードから複数のデフォルトエッジは設定不可
 2. **設問ノードのみ**: デフォルトエッジは設問カテゴリ（SA/MA/NA）を持つノードからのみ設定可能
 3. **FAは対象外**: 自由入力（FA）は分岐不可のため、デフォルトエッジも不要
 4. **優先順位**: 条件付きエッジを先に評価し、どれにもマッチしない場合にデフォルトエッジを使用
 
-### 3. 評価ロジック
+### 2. 評価ロジック
 
 ```
 遷移先の決定:
@@ -68,9 +85,9 @@ export interface CustomEdge {
    - デフォルトエッジがなければ、遷移不可（エラー）
 ```
 
-### 4. 網羅性チェックの変更
+### 3. 網羅性チェックの変更
 
-#### 現状のロジック
+#### 現状のロジック（`checkChoiceCoverage`）
 
 ```typescript
 // SA/MA: すべての選択肢がいずれかのエッジで使用されているか
@@ -88,122 +105,201 @@ export interface CustomEdge {
 
 ---
 
-## UI設計
+## 実装計画
 
-### NodeEditDialog の変更
+### Phase 1: 網羅性チェックの更新
 
-#### 接続追加タブ
+**修正ファイル**: `src/domain/coverage.ts`
 
-```
-┌─────────────────────────────────────┐
-│ 接続先                              │
-│ ○ 既存のノード  ○ 新規ノード作成    │
-├─────────────────────────────────────┤
-│ 分岐条件                            │
-│ ☑ デフォルトエッジとして設定        │
-│   （他の条件にマッチしない場合に遷移）│
-│                                     │
-│ [選択肢1] [選択肢2] [選択肢3]       │
-│ ※ デフォルトエッジの場合は無効化    │
-├─────────────────────────────────────┤
-│ [接続を追加]                        │
-└─────────────────────────────────────┘
-```
+#### 1.1 `checkChoiceCoverage` 関数の修正
 
-#### 動作仕様
+```typescript
+export function checkChoiceCoverage<T extends GraphNode>(
+  nodes: T[],
+  edges: FlowchartEdge[]
+): CoverageResult[] {
+  // ...
 
-1. 「デフォルトエッジとして設定」チェックボックスを追加
-2. チェック時:
-   - 分岐条件の選択UIを無効化
-   - ラベルを「その他」または「デフォルト」に自動設定
-3. 既にデフォルトエッジが存在する場合:
-   - チェックボックスを無効化
-   - 「既にデフォルトエッジが設定されています」と表示
+  for (const node of questionNodes) {
+    const outgoingEdges = edges.filter(edge => edge.from === node.id);
 
-### サイドパネルの表示
+    // デフォルトエッジの存在をチェック
+    const hasDefaultEdge = outgoingEdges.some(edge => {
+      // エッジの元データ（entryRules）を参照して default 条件をチェック
+      // → FlowchartEdge にはラベルしかないため、別の方法が必要
+    });
 
-デフォルトエッジは視覚的に区別する:
+    // デフォルトエッジがある場合は網羅されているとみなす
+    if (hasDefaultEdge) {
+      results.push({
+        nodeId: node.id,
+        // ...
+        isCovered: true,  // デフォルトエッジがあれば常に true
+      });
+      continue;
+    }
 
-```
-┌─────────────────────────────────────┐
-│ エッジ（接続）                      │
-│ A → B  [選択肢1, 選択肢2]          │
-│ A → C  [デフォルト] ← 特別なバッジ  │
-└─────────────────────────────────────┘
+    // 以下、既存のロジック
+    // ...
+  }
+}
 ```
 
-### プレビューでの表示
+#### 1.2 問題点: FlowchartEdge と NodeEntryRule の関係
 
-- デフォルトエッジのスタイル: 太線（`thick`）または破線（`dotted`）で区別
-- ラベル: 「その他」「default」など
+現在の `checkChoiceCoverage` は `FlowchartEdge` を受け取るが、デフォルト条件は `NodeEntryRule.visibilityCondition` に格納されている。
+
+**解決策**:
+- `FlowchartEdge` を生成する際に、`visibilityCondition.type === 'default'` の情報を保持する
+- または、`checkChoiceCoverage` に `CustomNode[]` を渡して `entryRules` から直接チェックする
+
+#### 1.3 推奨アプローチ: CustomNode[] を使用
+
+```typescript
+export function checkChoiceCoverage<T extends GraphNode & { entryRules?: NodeEntryRule[] }>(
+  nodes: T[],
+  edges: FlowchartEdge[]
+): CoverageResult[] {
+  // ...
+
+  for (const node of questionNodes) {
+    // このノードから出るエッジ（このノードをソースとする entryRules を持つノード）を検索
+    const outgoingRules: NodeEntryRule[] = [];
+    for (const targetNode of nodes) {
+      if (targetNode.entryRules) {
+        const rulesFromThisNode = targetNode.entryRules.filter(r => r.sourceNodeId === node.id);
+        outgoingRules.push(...rulesFromThisNode);
+      }
+    }
+
+    // デフォルトエッジの存在をチェック
+    const hasDefaultEdge = outgoingRules.some(
+      rule => rule.visibilityCondition?.type === 'default'
+    );
+
+    if (hasDefaultEdge) {
+      results.push({
+        nodeId: node.id,
+        questionCategory: node.questionCategory!,
+        allChoices: node.choices || [],
+        usedChoiceIds: [],
+        unusedChoices: [],
+        isCovered: true,
+        hasOutgoingEdges: true,
+        outgoingEdgeCount: outgoingRules.length,
+      });
+      continue;
+    }
+
+    // 以下、既存のロジック（edges を使用）
+    // ...
+  }
+}
+```
+
+### Phase 2: デフォルトエッジの制約バリデーション
+
+**修正ファイル**: `src/components/EntryRuleEditor.tsx`
+
+#### 2.1 同一ソースノードからの重複デフォルトエッジを防ぐ
+
+```typescript
+// 既存のデフォルトエッジがあるかチェック
+const existingDefaultEdge = useMemo(() => {
+  // sourceNodeId からの既存エッジにデフォルトがあるか
+  // → 親コンポーネントから情報を受け取る必要がある
+}, [sourceNodeId, /* 既存ルール情報 */]);
+
+// デフォルトオプションの表示条件
+{!existingDefaultEdge && <option value="default">デフォルト（その他）</option>}
+```
+
+#### 2.2 UI での警告表示
+
+既にデフォルトエッジが存在する場合:
+- 条件タイプの選択肢から「デフォルト」を除外
+- または、選択した場合にエラーメッセージを表示
+
+### Phase 3: 複合条件との整合性
+
+**修正ファイル**: `src/domain/coverage.ts` の `checkCompoundConditionCoverage`
+
+デフォルトエッジがある場合、複合条件の組み合わせ網羅性チェックも緩和する:
+
+```typescript
+// デフォルトエッジがあれば、未カバーの組み合わせはデフォルトでカバーされる
+if (hasDefaultEdge) {
+  results.push({
+    nodeId: node.id,
+    hasCompoundConditions: true,
+    relatedNodeIds: Array.from(relatedNodeIds),
+    uncoveredCombinations: [],  // デフォルトがあれば空
+    isFullyCovered: true,
+  });
+  continue;
+}
+```
 
 ---
 
-## 実装ステップ
+## 動作確認
 
-### Phase 1: データ構造の変更
+### テストケース1: MAの設問にデフォルトエッジ
 
-1. `EdgeCondition` に `isDefault` フラグを追加
-2. `CustomEdge` に `isDefault` フラグを追加
-3. 型定義ファイル（`flowchart.ts`）を更新
+1. Node 1（MA、選択肢: A, B, C, D, E）が存在
+2. Node 1 → Node 2（選択肢A）を追加
+3. Node 1 → Node 3（デフォルト）を追加
+4. **期待**: 網羅性チェックがパス（isCovered = true）
 
-### Phase 2: 網羅性チェックの更新
+### テストケース2: SAの設問に条件付きエッジ + デフォルトエッジ
 
-1. `src/domain/coverage.ts` を修正
-2. デフォルトエッジがある場合は `isCovered = true` を返す
-3. 警告メッセージの更新
+1. Node 1（SA、選択肢: A, B, C）が存在
+2. Node 1 → Node 2（選択肢A, B）を追加
+3. Node 1 → Node 3（デフォルト）を追加
+4. **期待**: 網羅性チェックがパス
 
-### Phase 3: UI実装
+### テストケース3: 同一ノードに2つ目のデフォルトエッジ
 
-1. `NodeEditDialog.tsx` にデフォルトエッジオプションを追加
-2. 既存デフォルトエッジの検出ロジックを実装
-3. チェックボックスの有効/無効制御
+1. Node 1 → Node 2（デフォルト）が存在
+2. Node 1 → Node 3（デフォルト）を追加しようとする
+3. **期待**: エラーまたは「デフォルト」オプションが非表示
 
-### Phase 4: エッジ編集対応
+### テストケース4: NAの設問にデフォルトエッジ
 
-1. `EdgeEditDialog.tsx` でデフォルトエッジの編集対応
-2. デフォルトエッジの解除機能
+1. Node 1（NA）が存在
+2. Node 1 → Node 2（> 100）を追加
+3. Node 1 → Node 3（デフォルト）を追加
+4. **期待**: 網羅性チェックがパス（数値範囲外はデフォルトで遷移）
 
-### Phase 5: 表示の調整
+### テストケース5: 複合条件 + デフォルト
 
-1. サイドパネルでのバッジ表示
-2. プレビューでのスタイル適用
-3. Mermaidコード生成の調整
+1. Node 1（SA）→ Node 2（MA）の経路が存在
+2. Node 2 → Node 3（複合条件: Node1=A AND Node2=B）を追加
+3. Node 2 → Node 4（デフォルト）を追加
+4. **期待**: 複合条件の組み合わせ網羅性チェックがパス
 
 ---
 
 ## 考慮事項
 
-### 複合条件との関係
+### プレビューでのスタイル
 
-- 複合条件（AND条件）にはデフォルトエッジを設定しない
-- 複合条件は明示的な条件指定が前提
+デフォルトエッジを視覚的に区別する:
+- 破線（dotted）スタイルを推奨
+- ラベル「その他」で表示
 
-### 状態ノードとの関係
+### エッジ競合検出との関係
 
-- 状態ノード（`_state_` プレフィックス）からのエッジにはデフォルトエッジを設定しない
-- 状態ノードは複合条件の結果として自動生成されるため
+デフォルトエッジは他のエッジと競合しない（フォールバックなので）:
+- `checkEdgeConditionConflicts` ではデフォルトエッジをスキップ
 
 ### 将来の拡張
 
 - OR条件対応時の優先順位ルール
-- デフォルトエッジの条件付き設定（例: 特定の選択肢以外）
 
----
-
-## テストケース
-
-### 正常系
-
-1. MAの設問にデフォルトエッジを設定 → 網羅性チェックがパス
-2. SAの設問に条件付きエッジ + デフォルトエッジ → 正常動作
-3. NAの設問にデフォルトエッジ → 数値範囲外はデフォルトで遷移
-
-### 異常系
-
-1. 同一ノードに2つ目のデフォルトエッジを設定 → エラー
-2. FAの設問にデフォルトエッジ → 設定不可
-3. デフォルトエッジのみ（条件付きエッジなし） → 警告表示
+※ 以下は設計上不要と判断：
+- ~~デフォルトエッジの条件付き設定~~ → 条件があるなら通常のエッジを使用すべき
+- ~~デフォルトエッジの複数対応~~ → 「それ以外すべて」の行き先は論理的に1つのみ
 
 ---
 

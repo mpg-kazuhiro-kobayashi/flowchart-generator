@@ -137,6 +137,30 @@ export default function EntryRuleEditor({
   const sourceHasChoices = selectedSourceNode?.choices && selectedSourceNode.choices.length > 0;
   const sourceIsNumeric = selectedSourceNode?.questionCategory === 'NA';
 
+  // 選択中のソースノードから既にデフォルトエッジが出ているかをチェック
+  // 編集モードの場合は、自分自身のルールは除外する
+  const hasExistingDefaultEdge = useMemo(() => {
+    if (!sourceNodeId) return false;
+    for (const node of allNodes) {
+      if (!node.entryRules) continue;
+      for (const rule of node.entryRules) {
+        // 編集モードの場合、自分自身のルールは除外
+        if (mode === 'edit' && initialRule && rule.id === initialRule.id) continue;
+        if (rule.sourceNodeId === sourceNodeId && rule.visibilityCondition?.type === 'default') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [sourceNodeId, allNodes, mode, initialRule]);
+
+  // ソースノード変更時に、既にデフォルトエッジがある場合は条件タイプをリセット
+  useEffect(() => {
+    if (hasExistingDefaultEdge && conditionType === 'default') {
+      setConditionType('always');
+    }
+  }, [hasExistingDefaultEdge, conditionType]);
+
   // 複合条件に使用できるノード（接続元ノードから逆方向に辿れる設問ノード + 接続元ノード自身）
   // sourceNodeId が変更されるたびに再計算
   const conditionNodes = useMemo((): ConditionNode[] => {
@@ -302,8 +326,14 @@ export default function EntryRuleEditor({
           {sourceIsNumeric && <option value="numeric">数値条件</option>}
           {/* 複合条件は経路上に2つ以上の設問ノードがある場合のみ表示 */}
           {conditionNodes.length >= 2 && <option value="compound">複合条件</option>}
-          <option value="default">デフォルト（その他）</option>
+          {/* デフォルトエッジは同一ソースノードから1つのみ許可 */}
+          {!hasExistingDefaultEdge && <option value="default">条件なし</option>}
         </select>
+        {hasExistingDefaultEdge && conditionType !== 'default' && (
+          <p className="text-xs text-gray-500 mt-1">
+            ※ このノードには既にデフォルトエッジが設定されています
+          </p>
+        )}
       </div>
 
       {/* 選択肢条件 */}

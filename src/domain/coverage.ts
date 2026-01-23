@@ -2,7 +2,7 @@
  * 設問ノードの網羅性チェックに関するユーティリティ関数
  */
 
-import { QuestionCategory, ChoiceOption, CompoundCondition, SingleCondition, FlowchartEdge } from '@/types/flowchart';
+import { QuestionCategory, ChoiceOption, CompoundCondition, SingleCondition, FlowchartEdge, NodeEntryRule } from '@/types/flowchart';
 import { NumericRange, operatorToRange, findNumericGaps, rangesOverlap, rangeContainedIn } from './numericRange';
 
 /**
@@ -13,6 +13,7 @@ interface GraphNode {
   label?: string;
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
+  entryRules?: NodeEntryRule[];
 }
 
 /**
@@ -40,6 +41,25 @@ export interface CoverageResult {
 }
 
 /**
+ * 指定したソースノードからのデフォルトエッジが存在するかをチェック
+ *
+ * @param sourceNodeId ソースノードID
+ * @param nodes 全ノードの配列
+ * @returns デフォルトエッジが存在する場合は true
+ */
+function hasDefaultEdgeFromNode<T extends GraphNode>(sourceNodeId: string, nodes: T[]): boolean {
+  for (const node of nodes) {
+    if (!node.entryRules) continue;
+    for (const rule of node.entryRules) {
+      if (rule.sourceNodeId === sourceNodeId && rule.visibilityCondition?.type === 'default') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * 設問ノードの選択肢網羅性をチェック
  *
  * @param nodes 全ノードの配列
@@ -63,6 +83,9 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
     // このノードから出るエッジを検索
     const outgoingEdges = edges.filter(edge => edge.from === node.id);
+
+    // デフォルトエッジの存在をチェック
+    const hasDefaultEdge = hasDefaultEdgeFromNode(node.id, nodes);
     const hasOutgoingEdges = outgoingEdges.length > 0;
 
     // SA/MAの場合: 選択肢の網羅性をチェック
@@ -90,13 +113,18 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
       const unusedChoices = choices.filter(c => !usedChoiceIds.has(c.id));
 
+      // デフォルトエッジがある場合は、未使用選択肢があっても網羅されているとみなす
+      const isCovered = hasDefaultEdge
+        ? hasOutgoingEdges
+        : unusedChoices.length === 0 && hasOutgoingEdges;
+
       results.push({
         nodeId: node.id,
         questionCategory: node.questionCategory,
         allChoices: choices,
         usedChoiceIds: Array.from(usedChoiceIds),
         unusedChoices,
-        isCovered: unusedChoices.length === 0 && hasOutgoingEdges,
+        isCovered,
         hasOutgoingEdges,
         outgoingEdgeCount: outgoingEdges.length,
       });
@@ -126,7 +154,11 @@ export function checkChoiceCoverage<T extends GraphNode>(
 
       // ギャップを検出
       const numericGaps = findNumericGaps(ranges);
-      const isCovered = numericGaps.length === 0 && hasOutgoingEdges;
+
+      // デフォルトエッジがある場合は、数値ギャップがあっても網羅されているとみなす
+      const isCovered = hasDefaultEdge
+        ? hasOutgoingEdges
+        : numericGaps.length === 0 && hasOutgoingEdges;
 
       results.push({
         nodeId: node.id,
@@ -777,6 +809,31 @@ export function checkCompoundConditionCoverage<T extends GraphNode>(
     const compoundConditionEdges = outgoingEdges.filter(e => e.compoundCondition);
     if (compoundConditionEdges.length === 0) {
       // 複合条件がない場合はスキップ（既存の単一網羅性チェックで対応）
+      continue;
+    }
+
+    // デフォルトエッジの存在をチェック
+    const hasDefaultEdge = hasDefaultEdgeFromNode(node.id, nodes);
+
+    // デフォルトエッジがある場合は、未カバーの組み合わせがあっても網羅されているとみなす
+    if (hasDefaultEdge) {
+      const relatedNodeIds = new Set<string>();
+      relatedNodeIds.add(node.id);
+      for (const edge of compoundConditionEdges) {
+        if (edge.compoundCondition) {
+          for (const condition of edge.compoundCondition.conditions) {
+            relatedNodeIds.add(condition.nodeId);
+          }
+        }
+      }
+
+      results.push({
+        nodeId: node.id,
+        hasCompoundConditions: true,
+        relatedNodeIds: Array.from(relatedNodeIds),
+        uncoveredCombinations: [],
+        isFullyCovered: true,
+      });
       continue;
     }
 
