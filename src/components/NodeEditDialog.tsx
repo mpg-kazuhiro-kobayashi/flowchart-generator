@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FlowchartNode, FlowchartEdge, ChoiceOption, QuestionCategory, NodeEntryRule } from '@/types/flowchart';
+import { FlowchartNode, FlowchartEdge, ChoiceOption, QuestionCategory, NodeEntryRule, NodeType } from '@/types/flowchart';
 import { NumericRange, rangeToString } from '@/domain/numericRange';
 import { EdgeConflict } from '@/domain/coverage';
 import { generateUUID } from '@/lib/uuid';
@@ -37,7 +37,7 @@ export interface CoverageInfo {
 interface NodeEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  sourceNode: (FlowchartNode & { questionCategory?: QuestionCategory; choices?: ChoiceOption[]; entryRules?: NodeEntryRule[] }) | null;
+  sourceNode: (FlowchartNode & { nodeType?: NodeType; questionCategory?: QuestionCategory; choices?: ChoiceOption[]; entryRules?: NodeEntryRule[] }) | null;
   availableNodes: FlowchartNode[];
   /** 全ノード一覧（経路解析用） */
   allNodes: FlowchartNode[];
@@ -45,6 +45,8 @@ interface NodeEditDialogProps {
   allEdges: FlowchartEdge[];
   onUpdateNode: (nodeId: string, update: NodeUpdateResult) => void;
   onDeleteNode?: (nodeId: string) => void;
+  /** ノードが削除可能かどうかを判定する関数 */
+  canDeleteNode?: (nodeId: string) => boolean;
   onAddEntryRule?: (nodeId: string, rule: Omit<NodeEntryRule, 'id'>) => void;
   onUpdateEntryRule?: (nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => void;
   onRemoveEntryRule?: (nodeId: string, ruleId: string) => void;
@@ -65,6 +67,7 @@ export default function NodeEditDialog({
   allEdges,
   onUpdateNode,
   onDeleteNode,
+  canDeleteNode,
   onAddEntryRule,
   onUpdateEntryRule,
   onRemoveEntryRule,
@@ -165,6 +168,15 @@ export default function NodeEditDialog({
   const isSettingsValid = nodeLabel.trim() !== '';
   const isRootNode = !sourceNode?.entryRules || sourceNode.entryRules.length === 0;
 
+  // ノードタイプ判定
+  const nodeType = sourceNode?.nodeType || 'question';
+  const isStartNode = nodeType === 'start';
+  const isEndNode = nodeType === 'end';
+  const isSpecialNode = isStartNode || isEndNode;
+
+  // 削除可能かどうか
+  const isDeletable = canDeleteNode ? canDeleteNode(sourceNode?.id || '') : !isStartNode;
+
   // 編集中のルールを取得
   const editingRule = editingRuleId
     ? sourceNode?.entryRules?.find(r => r.id === editingRuleId)
@@ -180,11 +192,21 @@ export default function NodeEditDialog({
       {/* ダイアログ本体 */}
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
-          <h2 className="text-xl font-bold text-white">ノード設定</h2>
-          <p className="text-blue-100 text-sm mt-1">
+        <div className={`px-6 py-4 ${
+          isStartNode
+            ? 'bg-gradient-to-r from-green-500 to-green-600'
+            : isEndNode
+              ? 'bg-gradient-to-r from-purple-500 to-purple-600'
+              : 'bg-gradient-to-r from-blue-500 to-blue-600'
+        }`}>
+          <h2 className="text-xl font-bold text-white">
+            {isStartNode ? '開始ノード' : isEndNode ? '終了ノード' : 'ノード設定'}
+          </h2>
+          <p className="text-white/80 text-sm mt-1">
             「{sourceNode.label}」({sourceNode.id})
-            {isRootNode && <span className="ml-2 px-2 py-0.5 bg-blue-400 rounded text-xs">ルートノード</span>}
+            {isStartNode && <span className="ml-2 px-2 py-0.5 bg-green-400 rounded text-xs">開始</span>}
+            {isEndNode && <span className="ml-2 px-2 py-0.5 bg-purple-400 rounded text-xs">終了</span>}
+            {!isSpecialNode && isRootNode && <span className="ml-2 px-2 py-0.5 bg-blue-400 rounded text-xs">ルートノード</span>}
           </p>
         </div>
 
@@ -249,7 +271,7 @@ export default function NodeEditDialog({
           </div>
         )}
 
-        {/* タブ */}
+        {/* タブ（開始ノードは到達ルールタブを表示しない） */}
         <div className="flex border-b border-gray-200">
           <button
             type="button"
@@ -260,24 +282,26 @@ export default function NodeEditDialog({
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
-            設問設定
+            {isSpecialNode ? 'ノード情報' : '設問設定'}
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('entryRules')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-              activeTab === 'entryRules'
-                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            到達ルール
-            {sourceNode.entryRules && sourceNode.entryRules.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
-                {sourceNode.entryRules.length}
-              </span>
-            )}
-          </button>
+          {!isStartNode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('entryRules')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeTab === 'entryRules'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              到達ルール
+              {sourceNode.entryRules && sourceNode.entryRules.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+                  {sourceNode.entryRules.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* コンテンツ */}
@@ -285,117 +309,155 @@ export default function NodeEditDialog({
           {/* 設問設定タブ */}
           {activeTab === 'settings' && (
             <div className="space-y-5">
-              {/* ラベル */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ノードラベル
-                </label>
-                <input
-                  type="text"
-                  value={nodeLabel}
-                  onChange={e => setNodeLabel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                />
-              </div>
-
-              {/* 設問タイプ */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  設問タイプ
-                </label>
-                <div className="space-y-2">
-                  {questionCategories.map(cat => (
-                    <label
-                      key={cat.value}
-                      className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
-                        nodeQuestionCategory === cat.value
-                          ? 'bg-blue-50 border-2 border-blue-500'
-                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="questionCategory"
-                        value={cat.value}
-                        checked={nodeQuestionCategory === cat.value}
-                        onChange={e => {
-                          const value = e.target.value as QuestionCategory | '';
-                          setNodeQuestionCategory(value);
-                          if ((value === 'SA' || value === 'MA') && nodeChoices.length === 0) {
-                            setNodeChoices([]);
-                          }
-                        }}
-                        className="sr-only"
-                      />
-                      <div className="flex-1">
-                        <span className="font-medium text-gray-900">{cat.label}</span>
-                        <p className="text-gray-500 text-xs mt-0.5">{cat.description}</p>
-                      </div>
-                      {nodeQuestionCategory === cat.value && (
-                        <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              {/* 開始・終了ノードの場合は編集不可の表示 */}
+              {isSpecialNode ? (
+                <div className={`p-4 rounded-lg border ${
+                  isStartNode ? 'bg-green-50 border-green-200' : 'bg-purple-50 border-purple-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isStartNode ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+                    }`}>
+                      {isStartNode ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                         </svg>
                       )}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* 選択肢編集（SA/MAの場合） */}
-              {(nodeQuestionCategory === 'SA' || nodeQuestionCategory === 'MA') && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      選択肢
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addChoice}
-                      className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                      + 選択肢を追加
-                    </button>
+                    </div>
+                    <div>
+                      <p className={`font-medium ${isStartNode ? 'text-green-800' : 'text-purple-800'}`}>
+                        {isStartNode ? '開始ノード' : '終了ノード'}
+                      </p>
+                      <p className={`text-sm ${isStartNode ? 'text-green-600' : 'text-purple-600'}`}>
+                        {isStartNode
+                          ? 'フローチャートの開始点です。ラベルは「開始」に固定されています。'
+                          : 'フローチャートの終了点です。ラベルは「終了」に固定されています。'
+                        }
+                      </p>
+                    </div>
                   </div>
-                  {nodeChoices.length > 0 ? (
-                    <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-lg">
-                      {nodeChoices.map((choice, index) => (
-                        <div key={index} className="flex gap-2 items-center bg-white p-2 rounded border border-gray-200">
+                </div>
+              ) : (
+                <>
+                  {/* ラベル */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ノードラベル
+                    </label>
+                    <input
+                      type="text"
+                      value={nodeLabel}
+                      onChange={e => setNodeLabel(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    />
+                  </div>
+
+                  {/* 設問タイプ */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      設問タイプ
+                    </label>
+                    <div className="space-y-2">
+                      {questionCategories.map(cat => (
+                        <label
+                          key={cat.value}
+                          className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                            nodeQuestionCategory === cat.value
+                              ? 'bg-blue-50 border-2 border-blue-500'
+                              : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                          }`}
+                        >
                           <input
-                            type="text"
-                            value={choice.label}
-                            onChange={e => updateChoice(index, 'label', e.target.value)}
-                            className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
-                            placeholder="ラベル"
+                            type="radio"
+                            name="questionCategory"
+                            value={cat.value}
+                            checked={nodeQuestionCategory === cat.value}
+                            onChange={e => {
+                              const value = e.target.value as QuestionCategory | '';
+                              setNodeQuestionCategory(value);
+                              if ((value === 'SA' || value === 'MA') && nodeChoices.length === 0) {
+                                setNodeChoices([]);
+                              }
+                            }}
+                            className="sr-only"
                           />
-                          <button
-                            type="button"
-                            onClick={() => removeChoice(index)}
-                            className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                          >
-                            削除
-                          </button>
-                        </div>
+                          <div className="flex-1">
+                            <span className="font-medium text-gray-900">{cat.label}</span>
+                            <p className="text-gray-500 text-xs mt-0.5">{cat.description}</p>
+                          </div>
+                          {nodeQuestionCategory === cat.value && (
+                            <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </label>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
-                      選択肢がありません。「+ 選択肢を追加」をクリックして追加してください。
-                    </p>
-                  )}
-                </div>
-              )}
+                  </div>
 
-              {/* FA警告 */}
-              {nodeQuestionCategory === 'FA' && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800">
-                    自由入力（FA）の設問は分岐条件を設定できません。
-                  </p>
-                </div>
+                  {/* 選択肢編集（SA/MAの場合） */}
+                  {(nodeQuestionCategory === 'SA' || nodeQuestionCategory === 'MA') && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          選択肢
+                        </label>
+                        <button
+                          type="button"
+                          onClick={addChoice}
+                          className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                        >
+                          + 選択肢を追加
+                        </button>
+                      </div>
+                      {nodeChoices.length > 0 ? (
+                        <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                          {nodeChoices.map((choice, index) => (
+                            <div key={index} className="flex gap-2 items-center bg-white p-2 rounded border border-gray-200">
+                              <input
+                                type="text"
+                                value={choice.label}
+                                onChange={e => updateChoice(index, 'label', e.target.value)}
+                                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-900"
+                                placeholder="ラベル"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeChoice(index)}
+                                className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                          選択肢がありません。「+ 選択肢を追加」をクリックして追加してください。
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* FA警告 */}
+                  {nodeQuestionCategory === 'FA' && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-800">
+                        自由入力（FA）の設問は分岐条件を設定できません。
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* 削除セクション */}
-              {onDeleteNode && (
+              {onDeleteNode && isDeletable && (
                 <div className="pt-4 border-t border-gray-200">
                   <button
                     type="button"
@@ -412,6 +474,20 @@ export default function NodeEditDialog({
                     </svg>
                     このノードを削除
                   </button>
+                </div>
+              )}
+
+              {/* 削除不可の場合の説明 */}
+              {onDeleteNode && !isDeletable && (
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="p-3 bg-gray-100 rounded-lg text-center">
+                    <p className="text-sm text-gray-600">
+                      {isStartNode
+                        ? '開始ノードは削除できません。'
+                        : '終了ノードは最低1つ必要です。'
+                      }
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -527,7 +603,7 @@ export default function NodeEditDialog({
           >
             閉じる
           </button>
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && !isSpecialNode && (
             <button
               type="button"
               onClick={handleSaveSettings}

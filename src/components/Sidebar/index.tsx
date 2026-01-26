@@ -12,8 +12,10 @@ interface SidebarProps {
   compoundCoverageMap: Map<string, CompoundCoverageResult>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
+  onAddEndNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
   onRemoveNode: (index: number) => void;
+  canRemoveNode: (index: number) => boolean;
   onToggleChoicesEdit: (index: number) => void;
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
@@ -29,8 +31,10 @@ export default function Sidebar({
   compoundCoverageMap,
   editingChoicesIndex,
   onAddNode,
+  onAddEndNode,
   onUpdateNode,
   onRemoveNode,
+  canRemoveNode,
   onToggleChoicesEdit,
   onAddChoice,
   onRemoveChoice,
@@ -55,8 +59,10 @@ export default function Sidebar({
           compoundCoverageMap={compoundCoverageMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={onAddNode}
+          onAddEndNode={onAddEndNode}
           onUpdateNode={onUpdateNode}
           onRemoveNode={onRemoveNode}
+          canRemoveNode={canRemoveNode}
           onToggleChoicesEdit={onToggleChoicesEdit}
           onAddChoice={onAddChoice}
           onRemoveChoice={onRemoveChoice}

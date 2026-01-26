@@ -11,6 +11,7 @@ import {
   CompoundCondition,
   CustomNode,
   NodeEntryRule,
+  NodeType,
 } from '@/types/flowchart';
 import {
   formatCondition,
@@ -84,11 +85,22 @@ export class FlowchartGenerator {
   }
 
   /**
+   * ノードのラベルを取得（開始・終了ノードは固定ラベル）
+   */
+  private static getNodeLabel(node: FlowchartNode): string {
+    const nodeType = (node as FlowchartNode & { nodeType?: NodeType }).nodeType;
+    if (nodeType === 'start') return '開始';
+    if (nodeType === 'end') return '終了';
+    return node.label;
+  }
+
+  /**
    * ノード定義を生成
    */
   private static generateNode(node: FlowchartNode): string {
     const shape = node.shape || 'rectangle';
-    const nodeText = this.wrapNodeText(node.label, shape);
+    const label = this.getNodeLabel(node);
+    const nodeText = this.wrapNodeText(label, shape);
 
     let result = `${node.id}${nodeText}`;
 

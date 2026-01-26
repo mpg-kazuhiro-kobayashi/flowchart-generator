@@ -20,8 +20,10 @@ interface NodeListProps {
   compoundCoverageMap: Map<string, CompoundCoverageResult>;
   editingChoicesIndex: number | null;
   onAddNode: () => void;
+  onAddEndNode: () => void;
   onUpdateNode: (index: number, updates: Partial<CustomNode>) => void;
   onRemoveNode: (index: number) => void;
+  canRemoveNode: (index: number) => boolean;
   onToggleChoicesEdit: (index: number) => void;
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
@@ -35,8 +37,10 @@ export default function NodeList({
   compoundCoverageMap,
   editingChoicesIndex,
   onAddNode,
+  onAddEndNode,
   onUpdateNode,
   onRemoveNode,
+  canRemoveNode,
   onToggleChoicesEdit,
   onAddChoice,
   onRemoveChoice,
@@ -46,12 +50,20 @@ export default function NodeList({
     <div>
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-gray-900">ノード</h3>
-        <button
-          onClick={onAddNode}
-          className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          + 追加
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={onAddNode}
+            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            + 設問
+          </button>
+          <button
+            onClick={onAddEndNode}
+            className="px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
+          >
+            + 終了
+          </button>
+        </div>
       </div>
       <div className="space-y-3">
         {nodes.map((node, index) => {
@@ -61,67 +73,109 @@ export default function NodeList({
           const hasWarning = coverage && !coverage.isCovered;
           const hasCompoundWarning = compoundCoverage && !compoundCoverage.isFullyCovered;
           const hasConflict = conflicts.length > 0;
+
+          // ノードタイプ判定
+          const isStartNode = node.nodeType === 'start';
+          const isEndNode = node.nodeType === 'end';
+          const isSpecialNode = isStartNode || isEndNode;
+          const isDeletable = canRemoveNode(index);
+
+          // 開始・終了ノードの背景色
+          const bgClass = isStartNode
+            ? 'bg-green-50 border-green-300'
+            : isEndNode
+              ? 'bg-purple-50 border-purple-300'
+              : hasConflict
+                ? 'bg-red-50 border-red-300'
+                : (hasWarning || hasCompoundWarning)
+                  ? 'bg-amber-50 border-amber-300'
+                  : 'bg-gray-50 border-gray-200';
+
           return (
-            <div key={node.id} className={`p-3 rounded-lg border ${
-              hasConflict ? 'bg-red-50 border-red-300' : (hasWarning || hasCompoundWarning) ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'
-            }`}>
+            <div key={node.id} className={`p-3 rounded-lg border ${bgClass}`}>
+              {/* ノードタイプバッジ */}
+              {isSpecialNode && (
+                <div className="mb-2">
+                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                    isStartNode ? 'bg-green-200 text-green-800' : 'bg-purple-200 text-purple-800'
+                  }`}>
+                    {isStartNode ? '開始ノード' : '終了ノード'}
+                  </span>
+                </div>
+              )}
+
               {/* 基本情報行 */}
               <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={node.label}
-                  onChange={e => onUpdateNode(index, { label: e.target.value })}
-                  className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                  placeholder="ラベル"
-                />
-                <button
-                  onClick={() => onRemoveNode(index)}
-                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                >
-                  削除
-                </button>
-              </div>
-
-              {/* 設問カテゴリ選択 */}
-              <div className="mt-2 flex gap-2 items-center">
-                <span className="text-xs text-gray-600 min-w-16">設問タイプ:</span>
-                <select
-                  value={node.questionCategory || ''}
-                  onChange={e => {
-                    const category = e.target.value as QuestionCategory | '';
-                    if (category) {
-                      const updates: Partial<CustomNode> = { questionCategory: category };
-                      // SA/MAの場合、選択肢がなければ初期化
-                      if ((category === 'SA' || category === 'MA') && !node.choices) {
-                        updates.choices = [];
-                      }
-                      onUpdateNode(index, updates);
-                    } else {
-                      onUpdateNode(index, { questionCategory: undefined, choices: undefined });
-                    }
-                  }}
-                  className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
-                >
-                  {questionCategories.map(cat => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </option>
-                  ))}
-                </select>
-                {/* SA/MAの場合、選択肢編集ボタン */}
-                {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                {isSpecialNode ? (
+                  // 開始・終了ノードはラベル編集不可
+                  <span className="flex-1 px-2 py-1 text-xs text-gray-700 font-medium">
+                    {isStartNode ? '開始' : '終了'}
+                  </span>
+                ) : (
+                  <input
+                    type="text"
+                    value={node.label}
+                    onChange={e => onUpdateNode(index, { label: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                    placeholder="ラベル"
+                  />
+                )}
+                {isDeletable ? (
                   <button
-                    onClick={() => onToggleChoicesEdit(index)}
-                    className={`px-2 py-1 text-xs rounded ${
-                      editingChoicesIndex === index
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    onClick={() => onRemoveNode(index)}
+                    className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
                   >
-                    選択肢 ({node.choices?.length || 0})
+                    削除
                   </button>
+                ) : (
+                  <span className="px-2 py-1 text-xs text-gray-400">
+                    削除不可
+                  </span>
                 )}
               </div>
+
+              {/* 設問カテゴリ選択（開始・終了ノード以外） */}
+              {!isSpecialNode && (
+                <div className="mt-2 flex gap-2 items-center">
+                  <span className="text-xs text-gray-600 min-w-16">設問タイプ:</span>
+                  <select
+                    value={node.questionCategory || ''}
+                    onChange={e => {
+                      const category = e.target.value as QuestionCategory | '';
+                      if (category) {
+                        const updates: Partial<CustomNode> = { questionCategory: category };
+                        // SA/MAの場合、選択肢がなければ初期化
+                        if ((category === 'SA' || category === 'MA') && !node.choices) {
+                          updates.choices = [];
+                        }
+                        onUpdateNode(index, updates);
+                      } else {
+                        onUpdateNode(index, { questionCategory: undefined, choices: undefined });
+                      }
+                    }}
+                    className="flex-1 px-2 py-1 text-xs border rounded bg-white text-gray-900"
+                  >
+                    {questionCategories.map(cat => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                  {/* SA/MAの場合、選択肢編集ボタン */}
+                  {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && (
+                    <button
+                      onClick={() => onToggleChoicesEdit(index)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        editingChoicesIndex === index
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      選択肢 ({node.choices?.length || 0})
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* カテゴリの説明 */}
               {node.questionCategory && (

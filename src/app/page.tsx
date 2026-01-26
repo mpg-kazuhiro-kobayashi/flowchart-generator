@@ -16,111 +16,29 @@ import {
 } from '@/types/flowchart';
 
 // 初期ノードID
-const NODE_ID_1 = 'fewwqigivttlnc3c';
-const NODE_ID_2 = 'y461yijjbnmrzhfd';
-const NODE_ID_3 = 'rgoiwtcxdl994vi0';
-const NODE_ID_4 = 'kcupm6k1vrjh3gvf';
-const NODE_ID_5 = 'sq98x9qcj7fl3aft';
+const NODE_ID_START = 'start-node';
+const NODE_ID_END = 'exit-node';
 
-// 選択肢ID
-const CHOICE_1_OPT1 = 'monmvobuochf27jg';
-const CHOICE_1_OPT2 = 'zz4tyzxqdi242pju';
-const CHOICE_1_OPT3 = 'lo8v8ho66yi4j2l7';
-const CHOICE_2_YES = 'oamoe6ag2vv5w4yo';
-const CHOICE_2_NO = 'cn2w5ayuhun804cg';
-
-// 初期ノードデータ（entryRules 形式）
+// 初期ノードデータ（開始ノードと終了ノードのみ）
 const initialNodes: CustomNode[] = [
   {
-    id: NODE_ID_1,
-    label: "Node 1",
-    shape: "rectangle",
-    questionCategory: "SA",
-    choices: [
-      { id: CHOICE_1_OPT1, label: "選択肢1" },
-      { id: CHOICE_1_OPT2, label: "選択肢2" },
-      { id: CHOICE_1_OPT3, label: "選択肢3" },
-    ],
-    entryRules: [], // ルートノード
+    id: NODE_ID_START,
+    label: "開始",
+    shape: "trapezoid",
+    nodeType: "start",
+    entryRules: [],
   },
   {
-    id: NODE_ID_2,
-    label: "Node 2",
-    shape: "rectangle",
-    questionCategory: "SA",
-    choices: [
-      { id: CHOICE_2_YES, label: "Yes" },
-      { id: CHOICE_2_NO, label: "No" },
-    ],
+    id: NODE_ID_END,
+    label: "終了",
+    shape: "trapezoidAlt",
+    nodeType: "end",
     entryRules: [
       {
-        id: 'rule-node2-1',
-        sourceNodeId: NODE_ID_1,
+        id: 'rule-end-1',
+        sourceNodeId: NODE_ID_START,
         style: "solid",
-        visibilityCondition: {
-          type: 'choice',
-          choiceIds: [CHOICE_1_OPT1, CHOICE_1_OPT2],
-        },
-      },
-    ],
-  },
-  {
-    id: NODE_ID_3,
-    label: "Node 3",
-    shape: "rectangle",
-    entryRules: [
-      {
-        id: 'rule-node3-1',
-        sourceNodeId: NODE_ID_2,
-        style: "solid",
-        visibilityCondition: {
-          type: 'compound',
-          compound: {
-            conditions: [
-              { nodeId: NODE_ID_2, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_2_YES] } },
-              { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT1, CHOICE_1_OPT2] } },
-            ],
-            operator: "AND",
-          },
-        },
-      },
-    ],
-  },
-  {
-    id: NODE_ID_4,
-    label: "Node 4",
-    shape: "rectangle",
-    entryRules: [
-      {
-        id: 'rule-node4-1',
-        sourceNodeId: NODE_ID_2,
-        style: "solid",
-        visibilityCondition: {
-          type: 'compound',
-          compound: {
-            conditions: [
-              { nodeId: NODE_ID_2, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_2_YES] } },
-              { nodeId: NODE_ID_1, conditionType: "choice", choiceCondition: { choiceIds: [CHOICE_1_OPT2] } },
-            ],
-            operator: "AND",
-          },
-        },
-      },
-    ],
-  },
-  {
-    id: NODE_ID_5,
-    label: "Node 5",
-    shape: "rectangle",
-    entryRules: [
-      {
-        id: 'rule-node5-1',
-        sourceNodeId: NODE_ID_2,
-        style: "solid",
-        visibilityCondition: {
-          type: 'choice',
-          choiceIds: [CHOICE_2_NO],
-        },
+        visibilityCondition: { type: 'default' },
       },
     ],
   },
@@ -140,8 +58,10 @@ export default function Home() {
     compoundCoverageMap,
     compoundCoverageResults,
     addNode: handleAddNode,
+    addEndNode: handleAddEndNode,
     updateNode: handleUpdateNodeDirect,
     removeNode: handleRemoveNode,
+    canRemoveNode,
     toggleChoicesEdit: handleToggleChoicesEdit,
     addChoice: handleAddChoice,
     removeChoice: handleRemoveChoice,
@@ -286,10 +206,13 @@ export default function Home() {
     closeNodeDialog();
   }, [addEntryRule, closeNodeDialog]);
 
-  // エッジクリック用の availableNodes（対象ノード自身を除く）
+  // エッジクリック用の availableNodes（対象ノード自身と終了ノードを除く）
+  // 終了ノードは接続元として選択不可
   const entryRuleDialogAvailableNodes = useMemo((): FlowchartNode[] => {
     if (!entryRuleDialogInfo) return [];
-    return customNodes.filter(n => n.id !== entryRuleDialogInfo.targetNodeId);
+    return customNodes.filter(n =>
+      n.id !== entryRuleDialogInfo.targetNodeId && n.nodeType !== 'end'
+    );
   }, [entryRuleDialogInfo, customNodes]);
 
   // 到達ルール編集ダイアログを閉じる
@@ -353,8 +276,10 @@ export default function Home() {
           compoundCoverageMap={compoundCoverageMap}
           editingChoicesIndex={editingChoicesIndex}
           onAddNode={handleAddNode}
+          onAddEndNode={handleAddEndNode}
           onUpdateNode={handleUpdateNodeDirect}
           onRemoveNode={handleRemoveNode}
+          canRemoveNode={canRemoveNode}
           onToggleChoicesEdit={handleToggleChoicesEdit}
           onAddChoice={handleAddChoice}
           onRemoveChoice={handleRemoveChoice}
@@ -387,6 +312,7 @@ export default function Home() {
         onClose={closeNodeDialog}
         sourceNode={selectedSourceNode ? {
           ...selectedSourceNode,
+          nodeType: customNodes.find(n => n.id === selectedSourceNode.id)?.nodeType,
           questionCategory: customNodes.find(n => n.id === selectedSourceNode.id)?.questionCategory,
           choices: customNodes.find(n => n.id === selectedSourceNode.id)?.choices,
           entryRules: customNodes.find(n => n.id === selectedSourceNode.id)?.entryRules,
@@ -396,6 +322,10 @@ export default function Home() {
         allEdges={customEdges}
         onUpdateNode={handleUpdateNode}
         onDeleteNode={handleDeleteNode}
+        canDeleteNode={(nodeId) => {
+          const nodeIndex = customNodes.findIndex(n => n.id === nodeId);
+          return nodeIndex !== -1 && canRemoveNode(nodeIndex);
+        }}
         onAddEntryRule={handleAddEntryRule}
         onUpdateEntryRule={updateEntryRule}
         onRemoveEntryRule={removeEntryRule}

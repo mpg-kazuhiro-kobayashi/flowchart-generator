@@ -8,6 +8,7 @@ import {
   FlowchartEdge,
   CompoundCondition,
   SingleCondition,
+  NodeType,
 } from '@/types/flowchart';
 
 /**
@@ -202,4 +203,80 @@ export function getReachableChoicesConstraints(
   });
 
   return result;
+}
+
+/**
+ * ノード配列でのノードの順序（インデックス）を取得
+ *
+ * @param nodes 全ノードの配列
+ * @param nodeId 対象ノードのID
+ * @returns ノードの配列インデックス（見つからない場合は -1）
+ */
+export function getNodeOrder<T extends { id: string }>(
+  nodes: T[],
+  nodeId: string
+): number {
+  return nodes.findIndex(n => n.id === nodeId);
+}
+
+/**
+ * エッジの順序が有効かどうかをチェック
+ * 接続元ノードの配列インデックス < 接続先ノードの配列インデックス である必要がある
+ *
+ * @param nodes 全ノードの配列
+ * @param sourceNodeId 接続元ノードID
+ * @param targetNodeId 接続先ノードID
+ * @returns 順序が有効な場合 true
+ */
+export function isValidEdgeOrder<T extends { id: string }>(
+  nodes: T[],
+  sourceNodeId: string,
+  targetNodeId: string
+): boolean {
+  const sourceIndex = getNodeOrder(nodes, sourceNodeId);
+  const targetIndex = getNodeOrder(nodes, targetNodeId);
+
+  // どちらかが見つからない場合は無効
+  if (sourceIndex === -1 || targetIndex === -1) {
+    return false;
+  }
+
+  // 接続元のインデックス < 接続先のインデックス
+  return sourceIndex < targetIndex;
+}
+
+/**
+ * ノードタイプ付きノードの型定義
+ */
+interface NodeWithType {
+  id: string;
+  nodeType?: NodeType;
+}
+
+/**
+ * 到達ルールの接続元として選択可能なノードをフィルタリング
+ * - 終了ノードは接続元として選択不可
+ * - 配列インデックスが接続先より小さいノードのみ選択可能
+ *
+ * @param nodes 全ノードの配列
+ * @param targetNodeId 接続先（到達ルールを追加するノード）のID
+ * @returns 選択可能なノードの配列
+ */
+export function getSelectableSourceNodes<T extends NodeWithType>(
+  nodes: T[],
+  targetNodeId: string
+): T[] {
+  const targetIndex = getNodeOrder(nodes, targetNodeId);
+
+  return nodes.filter(node => {
+    // 自分自身は除外
+    if (node.id === targetNodeId) return false;
+
+    // 終了ノードは接続元として選択不可
+    if (node.nodeType === 'end') return false;
+
+    // 配列インデックスが接続先より小さいノードのみ選択可能
+    const nodeIndex = getNodeOrder(nodes, node.id);
+    return nodeIndex < targetIndex;
+  });
 }

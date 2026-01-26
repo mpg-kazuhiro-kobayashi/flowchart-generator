@@ -11,8 +11,9 @@ import {
   NodeEntryRule,
   NodeVisibilityCondition,
   SingleCondition,
+  NodeType,
 } from '@/types/flowchart';
-import { getReachableQuestionNodes, getReachableChoicesConstraints } from '@/domain/graphAnalysis';
+import { getReachableQuestionNodes, getReachableChoicesConstraints, isValidEdgeOrder } from '@/domain/graphAnalysis';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -71,10 +72,21 @@ export default function EntryRuleEditor({
   const [numericValue, setNumericValue] = useState<string>('');
   const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
 
-  // 選択可能なノード（対象ノード自身を除く）
+  // 選択可能なノード（対象ノード自身と終了ノードを除く、かつ順序が有効なもの）
+  // 終了ノードは接続元として選択不可（フローの終点のため）
+  // 配列インデックスが接続先より小さいノードのみ選択可能（循環防止）
   const selectableNodes = useMemo(
-    () => availableNodes.filter(n => n.id !== targetNodeId),
-    [availableNodes, targetNodeId]
+    () => availableNodes.filter(n => {
+      // 対象ノード自身を除外
+      if (n.id === targetNodeId) return false;
+      // 終了ノードを接続元から除外
+      const nodeType = (n as FlowchartNode & { nodeType?: NodeType }).nodeType;
+      if (nodeType === 'end') return false;
+      // 順序が有効なノードのみ（接続元のインデックス < 接続先のインデックス）
+      if (!isValidEdgeOrder(allNodes, n.id, targetNodeId)) return false;
+      return true;
+    }),
+    [availableNodes, targetNodeId, allNodes]
   );
 
   // 初期値を設定

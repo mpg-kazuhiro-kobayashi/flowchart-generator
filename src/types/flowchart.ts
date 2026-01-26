@@ -22,6 +22,12 @@ export type NodeShape =
   | 'trapezoid'      // [/text\] - 台形
   | 'trapezoidAlt';  // [\text/] - 逆台形
 
+/** ノードタイプ（フロー上の役割を定義） */
+export type NodeType =
+  | 'start'    // 開始ノード（フローの入口、1つのみ）
+  | 'question' // 設問ノード（SA/MA/FA/NA）
+  | 'end';     // 終了ノード（フローの出口、複数可）
+
 /** 設問カテゴリ */
 export type QuestionCategory =
   | 'SA'  // Single Answer - 単一選択
@@ -104,7 +110,9 @@ export interface FlowchartNode {
   shape?: NodeShape;
   /** スタイルクラス名 */
   className?: string;
-  /** 設問カテゴリ（設問ノードの場合） */
+  /** ノードタイプ（デフォルト: 'question'） */
+  nodeType?: NodeType;
+  /** 設問カテゴリ（nodeType が 'question' の場合のみ有効） */
   questionCategory?: QuestionCategory;
   /** 選択肢（SA/MAの場合） */
   choices?: ChoiceOption[];
@@ -209,6 +217,9 @@ export interface CustomNode {
   id: string;
   label: string;
   shape: NodeShape;
+  /** ノードタイプ（デフォルト: 'question'） */
+  nodeType?: NodeType;
+  /** 設問カテゴリ（nodeType が 'question' の場合のみ有効） */
   questionCategory?: QuestionCategory;
   choices?: ChoiceOption[];
   /** このノードが表示される経路を表すルール */

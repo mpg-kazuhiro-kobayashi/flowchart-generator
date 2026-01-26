@@ -22,6 +22,12 @@ JavaScript Object から自動的に Mermaid フローチャートを生成す�
 - リアルタイムプレビュー表示
 - 多様なノード形状（14種類）とエッジスタイル（9種類）
 
+### 開始・終了ノード
+- **開始ノード**: フローチャートの入口（1つのみ、削除不可）
+- **終了ノード**: フローチャートの出口（複数追加可能、最低1つ必要）
+- ノード追加時に自動的にエッジを接続
+- 配列順序によるノード順序管理（循環フロー防止）
+
 ### 設問機能
 - **SA（単一選択）**: 選択肢から1つを選択
 - **MA（複数選択）**: 選択肢から複数を選択
@@ -142,6 +148,7 @@ interface CustomNode {
   id: string;
   label: string;
   shape: NodeShape;
+  nodeType?: NodeType;                  // start, question, end
   questionCategory?: QuestionCategory;  // SA, MA, NA, FA
   choices?: ChoiceOption[];
   entryRules?: NodeEntryRule[];         // このノードへの到達ルール
@@ -311,6 +318,7 @@ npm run build
 | [auto-edge-label.md](./docs/auto-edge-label.md) | エッジラベル自動生成 |
 | [edge-condition-conflict.md](./docs/edge-condition-conflict.md) | エッジ競合検出 |
 | [compound-condition-coverage.md](./docs/compound-condition-coverage.md) | 複合条件の組み合わせ網羅性チェック |
+| [start-end-node-and-order.md](./docs/start-end-node-and-order.md) | 開始・終了ノードとノード順序 |
 
 ## ライセンス
 

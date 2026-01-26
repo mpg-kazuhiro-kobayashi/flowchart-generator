@@ -58,7 +58,10 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
   // ノードIDを抽出するヘルパー関数
   const extractNodeId = useCallback((domNodeId: string): string | null => {
     // 形式: flowchart-{nodeId}-{index} または node-{nodeId}-{index}
-    const match = domNodeId.match(/(?:flowchart|node)-([^-]+)/);
+    // nodeId にはハイフンが含まれる可能性があるため、末尾の数字部分を除去してからプレフィックスを削除
+    // 例: "flowchart-exit-node-123" -> "exit-node"
+    //     "flowchart-start-node-0" -> "start-node"
+    const match = domNodeId.match(/(?:flowchart|node)-(.+)-\d+$/);
     return match ? match[1] : null;
   }, []);
 

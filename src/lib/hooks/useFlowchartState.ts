@@ -70,11 +70,74 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
 
   // ========== ノード操作 ==========
 
+  /**
+   * 設問ノードを追加（終了ノードの前に挿入し、エッジを自動接続）
+   *
+   * 挿入時のエッジ処理:
+   * 1. 新規ノードに「直前のノードからの到達ルール」を追加
+   * 2. 終了ノードの到達ルールで「直前のノード」を参照しているものを「新規ノード」に更新
+   */
   const addNode = useCallback(() => {
     const newId = generateUUID();
-    const nodeNumber = nodes.length + 1;
-    setNodes(prev => [...prev, { id: newId, label: `Node ${nodeNumber}`, shape: 'rectangle', entryRules: [] }]);
+    // 設問ノードの数をカウント
+    const questionCount = nodes.filter(n => !n.nodeType || n.nodeType === 'question').length;
+
+    setNodes(prev => {
+      // 終了ノードを分離
+      const endNodes = prev.filter(n => n.nodeType === 'end');
+      const otherNodes = prev.filter(n => n.nodeType !== 'end');
+
+      // 直前のノード（新規ノードの接続元）を特定
+      const previousNode = otherNodes[otherNodes.length - 1];
+
+      // 新規ノードを作成（直前のノードからの到達ルールを設定）
+      const newNode: CustomNode = {
+        id: newId,
+        label: `Q${questionCount + 1}`,
+        shape: 'rectangle',
+        nodeType: 'question',
+        entryRules: previousNode ? [{
+          id: generateUUID(),
+          sourceNodeId: previousNode.id,
+          style: 'solid',
+          visibilityCondition: { type: 'default' },
+        }] : [],
+      };
+
+      // 終了ノードの到達ルールを更新（直前のノードを参照しているものを新規ノードに変更）
+      const updatedEndNodes = endNodes.map(endNode => {
+        if (!endNode.entryRules || !previousNode) return endNode;
+
+        const updatedRules = endNode.entryRules.map(rule => {
+          if (rule.sourceNodeId === previousNode.id) {
+            return { ...rule, sourceNodeId: newId };
+          }
+          return rule;
+        });
+
+        return { ...endNode, entryRules: updatedRules };
+      });
+
+      // 設問ノードは終了ノードの前に挿入
+      return [...otherNodes, newNode, ...updatedEndNodes];
+    });
   }, [nodes]);
+
+  /**
+   * 終了ノードを追加（配列の末尾に追加）
+   */
+  const addEndNode = useCallback(() => {
+    const newId = generateUUID();
+    const newNode: CustomNode = {
+      id: newId,
+      label: '終了',
+      shape: 'trapezoidAlt',
+      nodeType: 'end',
+      entryRules: [],
+    };
+
+    setNodes(prev => [...prev, newNode]);
+  }, []);
 
   const updateNode = useCallback((index: number, updates: Partial<CustomNode>) => {
     setNodes(prev => {
@@ -84,8 +147,31 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
     });
   }, []);
 
+  /**
+   * ノードを削除
+   * - 開始ノード: 削除不可
+   * - 終了ノード: 最低1つは残す必要あり
+   * - 設問ノード: 自由に削除可能
+   */
   const removeNode = useCallback((index: number) => {
-    const nodeId = nodes[index].id;
+    const targetNode = nodes[index];
+    const nodeId = targetNode.id;
+
+    // 開始ノードは削除不可
+    if (targetNode.nodeType === 'start') {
+      console.warn('開始ノードは削除できません');
+      return;
+    }
+
+    // 終了ノードの場合、最低1つは残す必要あり
+    if (targetNode.nodeType === 'end') {
+      const endNodeCount = nodes.filter(n => n.nodeType === 'end').length;
+      if (endNodeCount <= 1) {
+        console.warn('終了ノードは最低1つ必要です');
+        return;
+      }
+    }
+
     setNodes(prev => {
       // ノードを削除し、他ノードの entryRules から参照を削除
       return prev
@@ -126,6 +212,27 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
           return { ...node, entryRules: cleanedRules };
         });
     });
+  }, [nodes]);
+
+  /**
+   * ノードが削除可能かどうかをチェック
+   */
+  const canRemoveNode = useCallback((index: number): boolean => {
+    const targetNode = nodes[index];
+
+    // 開始ノードは削除不可
+    if (targetNode.nodeType === 'start') {
+      return false;
+    }
+
+    // 終了ノードの場合、最低1つは残す必要あり
+    if (targetNode.nodeType === 'end') {
+      const endNodeCount = nodes.filter(n => n.nodeType === 'end').length;
+      return endNodeCount > 1;
+    }
+
+    // 設問ノードは削除可能
+    return true;
   }, [nodes]);
 
   const toggleChoicesEdit = useCallback((index: number) => {
@@ -222,8 +329,10 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
     compoundCoverageMap,
     // Node actions
     addNode,
+    addEndNode,
     updateNode,
     removeNode,
+    canRemoveNode,
     toggleChoicesEdit,
     addChoice,
     removeChoice,

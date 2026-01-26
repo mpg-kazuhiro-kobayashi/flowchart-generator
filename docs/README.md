@@ -10,6 +10,7 @@
 | 網羅性チェック | 5 | 0 |
 | UI/UX | 4 | 1 |
 | リファクタリング | 3 | 0 |
+| データ構造・バリデーション | 1 | 0 |
 | 将来機能 | 0 | 1 |
 
 ---
@@ -50,6 +51,12 @@
 |-------------|------|------|
 | [refactoring-plan.md](./refactoring-plan.md) | ✅ 完了 | page.tsx の分割、カスタムフック抽出 |
 | [refactoring-phase2.md](./refactoring-phase2.md) | ✅ 完了 | domain/ 配下へのビジネスロジック分離 |
+
+### データ構造・バリデーション
+
+| ドキュメント | 状況 | 概要 |
+|-------------|------|------|
+| [start-end-node-and-order.md](./start-end-node-and-order.md) | ✅ 完了 | 開始・終了ノードとノード順序の導入 |
 
 ### 将来機能
 
@@ -99,6 +106,7 @@ interface CustomNode {
   id: string;
   label: string;
   shape: NodeShape;
+  nodeType?: NodeType;                  // start, question, end
   questionCategory?: QuestionCategory;  // SA, MA, NA, FA
   choices?: ChoiceOption[];
   entryRules?: NodeEntryRule[];  // このノードへの到達ルール
