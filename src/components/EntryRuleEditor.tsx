@@ -12,7 +12,7 @@ import {
   NodeVisibilityCondition,
   SingleCondition,
 } from '@/types/flowchart';
-import { getReachableQuestionNodes } from '@/domain/graphAnalysis';
+import { getReachableQuestionNodes, getReachableChoicesConstraints } from '@/domain/graphAnalysis';
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
@@ -166,6 +166,7 @@ export default function EntryRuleEditor({
 
   // 複合条件に使用できるノード（接続元ノードから逆方向に辿れる設問ノード + 接続元ノード自身）
   // sourceNodeId が変更されるたびに再計算
+  // 経路上の制約を考慮して、到達可能な選択肢のみにフィルタリング
   const conditionNodes = useMemo((): ConditionNode[] => {
     if (!sourceNodeId) return [];
 
@@ -182,12 +183,27 @@ export default function EntryRuleEditor({
       }
     }
 
-    return reachableNodes.map(node => ({
-      id: node.id,
-      label: node.label,
-      questionCategory: node.questionCategory,
-      choices: node.choices,
-    }));
+    // 接続元ノード（sourceNodeId）への到達制約を取得
+    // 新規ノードへの到達ルール追加時も、接続元ノードへの経路制約が適用される
+    // 例: Q3 → Q4 のエッジを追加する場合、Q3 への到達経路上の制約が適用される
+    const choiceConstraints = getReachableChoicesConstraints(sourceNodeId, allEdges);
+
+    return reachableNodes.map(node => {
+      // このノードに対する選択肢の制約を取得
+      const allowedChoices = choiceConstraints.get(node.id);
+
+      // 制約がある場合はフィルタリング、ない場合はすべての選択肢を許可
+      const filteredChoices = allowedChoices && node.choices
+        ? node.choices.filter(c => allowedChoices.has(c.id))
+        : node.choices;
+
+      return {
+        id: node.id,
+        label: node.label,
+        questionCategory: node.questionCategory,
+        choices: filteredChoices,
+      };
+    });
   }, [sourceNodeId, allNodes, allEdges]);
 
   // 複合条件を更新

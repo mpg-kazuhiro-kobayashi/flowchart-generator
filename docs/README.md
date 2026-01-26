@@ -7,8 +7,8 @@
 | カテゴリ | 完了 | 未実装 |
 |---------|------|--------|
 | データモデル | 3 | 0 |
-| 網羅性チェック | 4 | 0 |
-| UI/UX | 3 | 0 |
+| 網羅性チェック | 5 | 0 |
+| UI/UX | 4 | 1 |
 | リファクタリング | 3 | 0 |
 | 将来機能 | 0 | 1 |
 
@@ -42,6 +42,7 @@
 | [entry-rule-editor-component.md](./entry-rule-editor-component.md) | ✅ 完了 | EntryRuleEditor コンポーネント抽出 |
 | [node-deletion.md](./node-deletion.md) | ✅ 完了 | ノード削除機能（連鎖削除対応） |
 | [compound-condition-path-analysis.md](./compound-condition-path-analysis.md) | ✅ 完了 | 経路解析（到達可能ノードの取得） |
+| [compound-condition-choice-filtering.md](./compound-condition-choice-filtering.md) | 🔄 実装中 | 複合条件の選択肢フィルタリング（経路制約考慮） |
 
 ### リファクタリング
 
