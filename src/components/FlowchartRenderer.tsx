@@ -34,9 +34,11 @@ interface FlowchartRendererProps {
   uncoveredNodeIds?: string[];
   /** 競合しているエッジの情報 */
   conflictingEdges?: ConflictingEdgeInfo[];
+  /** ノード追加時のコールバック */
+  onAddNode?: () => void;
 }
 
-export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClick, uncoveredNodeIds = [], conflictingEdges = [] }: FlowchartRendererProps) {
+export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClick, uncoveredNodeIds = [], conflictingEdges = [], onAddNode }: FlowchartRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -294,6 +296,19 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
 
   return (
     <div className="w-full h-full relative">
+      {/* ノード追加ボタン */}
+      {onAddNode && (
+        <div className="absolute top-4 right-4 z-10">
+          <button
+            onClick={onAddNode}
+            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md flex items-center gap-2"
+          >
+            <span>+</span>
+            <span>ノード追加</span>
+          </button>
+        </div>
+      )}
+
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center overflow-auto"

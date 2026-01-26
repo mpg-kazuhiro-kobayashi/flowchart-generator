@@ -309,23 +309,44 @@ export default function Home() {
     closeEntryRuleDialog();
   }, [removeEntryRule, closeEntryRuleDialog]);
 
+  // ========== サイドバー表示状態 ==========
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+
   // ========== レンダリング ==========
 
   return (
     <div className="min-h-screen bg-gray-100">
       {/* ヘッダー */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Flowchart Generator</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            JavaScript Object から Mermaid フローチャートを生成 ・ ノードをクリックして編集
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Flowchart Generator</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              JavaScript Object から Mermaid フローチャートを生成 ・ ノードをクリックして編集
+            </p>
+          </div>
+          <button
+            onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+          >
+            {isSidebarVisible ? (
+              <>
+                <span>◀</span>
+                <span>サイドバーを閉じる</span>
+              </>
+            ) : (
+              <>
+                <span>▶</span>
+                <span>サイドバーを開く</span>
+              </>
+            )}
+          </button>
         </div>
       </header>
 
       <div className="flex h-[calc(100vh-80px)]">
         {/* 左パネル: サイドバー */}
-        <Sidebar
+        {isSidebarVisible && <Sidebar
           nodes={customNodes}
           coverageMap={coverageMap}
           conflictMap={conflictMap}
@@ -339,7 +360,7 @@ export default function Home() {
           onRemoveChoice={handleRemoveChoice}
           onUpdateChoice={handleUpdateChoice}
           mermaidCode={mermaidCode}
-        />
+        />}
 
         {/* 右パネル: プレビュー */}
         <div className="flex-1 p-4 bg-gray-50">
@@ -354,6 +375,7 @@ export default function Home() {
                 ...compoundCoverageResults.filter(r => !r.isFullyCovered).map(r => r.nodeId),
               ].filter((id, index, self) => self.indexOf(id) === index)}
               conflictingEdges={conflictingEdges}
+              onAddNode={handleAddNode}
             />
           </div>
         </div>
