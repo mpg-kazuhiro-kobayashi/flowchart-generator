@@ -314,7 +314,7 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
 
       <div
         ref={containerRef}
-        className="w-full h-full flex items-center justify-center overflow-auto"
+        className="w-full h-full overflow-auto"
         style={{
           minHeight: '400px',
         }}
@@ -367,11 +367,10 @@ export default function FlowchartRenderer({ mermaidCode, onNodeClick, onEdgeClic
           font-weight: 500;
         }
 
-        /* SVG全体のスタイル */
-        .flowchart svg {
-          width: 100%;
-          height: 100%;
-          max-width: none;
+        /* SVG全体のスタイル - コンテナ内で中央配置 */
+        svg {
+          display: block;
+          margin: 0 auto;
         }
 
         /* エッジのスタイル */
