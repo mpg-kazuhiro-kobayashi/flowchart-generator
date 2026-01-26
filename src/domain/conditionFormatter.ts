@@ -33,9 +33,6 @@ export function formatCondition(
   }
 
   switch (condition.type) {
-    case 'always':
-      return '';
-
     case 'default':
       return '条件なし';
 

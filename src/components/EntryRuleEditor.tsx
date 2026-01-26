@@ -31,7 +31,7 @@ export interface ConditionNode {
   choices?: ChoiceOption[];
 }
 
-type ConditionType = 'always' | 'choice' | 'numeric' | 'compound' | 'default';
+type ConditionType = 'choice' | 'numeric' | 'compound' | 'default';
 
 export interface EntryRuleEditorProps {
   /** 編集モード */
@@ -64,7 +64,7 @@ export default function EntryRuleEditor({
 }: EntryRuleEditorProps) {
   // 状態
   const [sourceNodeId, setSourceNodeId] = useState<string>('');
-  const [conditionType, setConditionType] = useState<ConditionType>('always');
+  const [conditionType, setConditionType] = useState<ConditionType>('default');
   const [style, setStyle] = useState<EdgeStyle>('solid');
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
   const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
@@ -84,13 +84,7 @@ export default function EntryRuleEditor({
       setStyle(initialRule.style || 'solid');
 
       const condition = initialRule.visibilityCondition;
-      if (!condition || condition.type === 'always') {
-        setConditionType('always');
-        setSelectedChoiceIds([]);
-        setNumericOperator('eq');
-        setNumericValue('');
-        setCompoundConditions(new Map());
-      } else if (condition.type === 'default') {
+      if (!condition || condition.type === 'default') {
         setConditionType('default');
         setSelectedChoiceIds([]);
         setNumericOperator('eq');
@@ -122,7 +116,7 @@ export default function EntryRuleEditor({
     } else {
       // 新規追加モード
       setSourceNodeId(selectableNodes.length > 0 ? selectableNodes[0].id : '');
-      setConditionType('always');
+      setConditionType('default');
       setStyle('solid');
       setSelectedChoiceIds([]);
       setNumericOperator('eq');
@@ -155,11 +149,20 @@ export default function EntryRuleEditor({
   }, [sourceNodeId, allNodes, mode, initialRule]);
 
   // ソースノード変更時に、既にデフォルトエッジがある場合は条件タイプをリセット
+  // デフォルトエッジは1つのソースノードから1つのみ許可されるため、
+  // 既にデフォルトエッジがある場合は選択肢条件か数値条件にリセット
   useEffect(() => {
     if (hasExistingDefaultEdge && conditionType === 'default') {
-      setConditionType('always');
+      // ソースノードの種類に応じて適切な条件タイプを選択
+      if (sourceHasChoices) {
+        setConditionType('choice');
+      } else if (sourceIsNumeric) {
+        setConditionType('numeric');
+      }
+      // それ以外の場合（設問ノードでない場合など）はデフォルトのまま
+      // ただしUIでは選択不可になる
     }
-  }, [hasExistingDefaultEdge, conditionType]);
+  }, [hasExistingDefaultEdge, conditionType, sourceHasChoices, sourceIsNumeric]);
 
   // 複合条件に使用できるノード（接続元ノードから逆方向に辿れる設問ノード + 接続元ノード自身）
   // sourceNodeId が変更されるたびに再計算
@@ -202,7 +205,6 @@ export default function EntryRuleEditor({
   const isValid = useMemo(() => {
     if (!sourceNodeId) return false;
     switch (conditionType) {
-      case 'always':
       case 'default':
         return true;
       case 'choice':
@@ -223,9 +225,6 @@ export default function EntryRuleEditor({
     let visibilityCondition: NodeVisibilityCondition | undefined;
 
     switch (conditionType) {
-      case 'always':
-        visibilityCondition = { type: 'always' };
-        break;
       case 'default':
         visibilityCondition = { type: 'default' };
         break;
@@ -321,13 +320,12 @@ export default function EntryRuleEditor({
           onChange={e => setConditionType(e.target.value as ConditionType)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
         >
-          <option value="always">無条件</option>
+          {/* デフォルトエッジは同一ソースノードから1つのみ許可 */}
+          {!hasExistingDefaultEdge && <option value="default">無条件</option>}
           {sourceHasChoices && <option value="choice">選択肢条件</option>}
           {sourceIsNumeric && <option value="numeric">数値条件</option>}
           {/* 複合条件は経路上に2つ以上の設問ノードがある場合のみ表示 */}
           {conditionNodes.length >= 2 && <option value="compound">複合条件</option>}
-          {/* デフォルトエッジは同一ソースノードから1つのみ許可 */}
-          {!hasExistingDefaultEdge && <option value="default">条件なし</option>}
         </select>
         {hasExistingDefaultEdge && conditionType !== 'default' && (
           <p className="text-xs text-gray-500 mt-1">

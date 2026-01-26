@@ -102,11 +102,11 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
               const filteredConditions = rule.visibilityCondition.compound.conditions.filter(
                 cond => cond.nodeId !== nodeId
               );
-              // 条件が空になった場合は always に変更
+              // 条件が空になった場合は default に変更
               if (filteredConditions.length === 0) {
                 return {
                   ...rule,
-                  visibilityCondition: { type: 'always' } as NodeVisibilityCondition,
+                  visibilityCondition: { type: 'default' } as NodeVisibilityCondition,
                 };
               }
               return {

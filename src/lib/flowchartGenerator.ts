@@ -318,7 +318,6 @@ export class FlowchartGenerator {
           edge.compoundCondition = vc.compound satisfies CompoundCondition;
           break;
 
-        case 'always':
         case 'default':
           // 条件なし（無条件遷移またはデフォルト分岐）
           // coverage では未指定扱い

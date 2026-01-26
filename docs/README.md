@@ -113,11 +113,10 @@ interface NodeEntryRule {
 
 // 条件タイプ
 type NodeVisibilityCondition =
-  | { type: 'always' }                              // 無条件
   | { type: 'choice'; choiceIds: string[] }         // 選択肢条件
   | { type: 'numeric'; numeric: NumericCondition }  // 数値条件
   | { type: 'compound'; compound: CompoundCondition } // 複合条件
-  | { type: 'default' };                            // デフォルト
+  | { type: 'default' };                            // 無条件（または他の条件にマッチしない場合のフォールバック）
 ```
 
 #### データフロー

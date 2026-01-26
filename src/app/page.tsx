@@ -398,7 +398,7 @@ export default function Home() {
         onClose={closeEntryRuleDialog}
         targetNodeId={entryRuleDialogInfo?.targetNodeId ?? ''}
         targetNodeLabel={entryRuleDialogInfo?.targetNodeLabel ?? ''}
-        rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', style: 'solid', visibilityCondition: { type: 'always' } }}
+        rule={entryRuleDialogInfo?.rule ?? { id: '', sourceNodeId: '', style: 'solid', visibilityCondition: { type: 'default' } }}
         availableNodes={entryRuleDialogAvailableNodes}
         allNodes={customNodes}
         allEdges={customEdges}

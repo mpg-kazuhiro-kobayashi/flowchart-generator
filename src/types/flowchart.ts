@@ -187,11 +187,10 @@ export interface FlowchartDefinition {
 
 /** ノードの表示条件 */
 export type NodeVisibilityCondition =
-  | { type: 'always' } // 無条件遷移
   | { type: 'choice'; choiceIds: string[] } // sourceNodeId自身の選択肢
   | { type: 'numeric'; numeric: NumericCondition } // 数値条件
   | { type: 'compound'; compound: CompoundCondition } // 複合条件（AND条件）
-  | { type: 'default' }; // 他の条件にマッチしない場合（else分岐）
+  | { type: 'default' }; // 無条件または他の条件にマッチしない場合（フォールバック）
 
 /** ノードへの到達ルール */
 export interface NodeEntryRule {
