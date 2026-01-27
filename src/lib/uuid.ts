@@ -12,8 +12,8 @@
  * @returns ID文字列（例: "a1b2c3d4e5f6g7h8"）
  */
 export function generateUUID(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const letters = "abcdefghijklmnopqrstuvwxyz";
 
   // 最初の文字は英字
   let result = letters[Math.floor(Math.random() * letters.length)];

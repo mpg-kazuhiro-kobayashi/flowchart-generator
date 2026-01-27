@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "oxlint": "oxlint src",
+    "fmt": "oxfmt --write src",
+    "fmt:check": "oxfmt --check src"
   },
   "dependencies": {
     "mermaid": "^11.9.0",
@@ -22,6 +25,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.4.4",
+    "oxc-transform": "^0.111.0",
+    "oxfmt": "^0.27.0",
+    "oxlint": "^1.42.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

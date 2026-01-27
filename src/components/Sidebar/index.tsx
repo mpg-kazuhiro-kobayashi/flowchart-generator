@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { CustomNode } from '@/types/flowchart';
-import { CoverageResult, EdgeConflict, CompoundCoverageResult } from '@/domain/coverage';
-import NodeList from './NodeList';
+import { CustomNode } from "@/types/flowchart";
+import { CoverageResult, EdgeConflict, CompoundCoverageResult } from "@/domain/coverage";
+import NodeList from "./NodeList";
 
 interface SidebarProps {
   // ノード関連
@@ -19,7 +19,7 @@ interface SidebarProps {
   onToggleChoicesEdit: (index: number) => void;
   onAddChoice: (nodeIndex: number) => void;
   onRemoveChoice: (nodeIndex: number, choiceIndex: number) => void;
-  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: 'label', value: string) => void;
+  onUpdateChoice: (nodeIndex: number, choiceIndex: number, field: "label", value: string) => void;
   // デバッグ表示
   mermaidCode: string;
 }
@@ -46,7 +46,8 @@ export default function Sidebar({
       {/* 操作説明 */}
       <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
         <p className="text-sm text-blue-800">
-          <strong>ヒント:</strong> フローチャートのノードをクリックすると、そのノードの設定や到達ルールを編集できます。
+          <strong>ヒント:</strong>{" "}
+          フローチャートのノードをクリックすると、そのノードの設定や到達ルールを編集できます。
         </p>
       </div>
 

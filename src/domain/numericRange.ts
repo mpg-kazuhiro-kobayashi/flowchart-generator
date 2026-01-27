@@ -2,7 +2,7 @@
  * 数値範囲の操作に関するユーティリティ関数
  */
 
-import { NumericOperator } from '@/types/flowchart';
+import { NumericOperator } from "@/types/flowchart";
 
 /**
  * 数値範囲を表す型
@@ -23,15 +23,15 @@ export interface NumericRange {
  */
 export function operatorToRange(operator: NumericOperator, value: number): NumericRange {
   switch (operator) {
-    case 'eq': // x = value
+    case "eq": // x = value
       return { min: value, minInclusive: true, max: value, maxInclusive: true };
-    case 'gt': // x > value
+    case "gt": // x > value
       return { min: value, minInclusive: false, max: null, maxInclusive: false };
-    case 'gte': // x >= value
+    case "gte": // x >= value
       return { min: value, minInclusive: true, max: null, maxInclusive: false };
-    case 'lt': // x < value
+    case "lt": // x < value
       return { min: null, minInclusive: false, max: value, maxInclusive: false };
-    case 'lte': // x <= value
+    case "lte": // x <= value
       return { min: null, minInclusive: false, max: value, maxInclusive: true };
     default:
       throw new Error(`Unknown operator: ${operator}`);
@@ -67,7 +67,7 @@ export function rangeToString(range: NumericRange): string {
   }
 
   // 全範囲
-  return '全範囲';
+  return "全範囲";
 }
 
 /**

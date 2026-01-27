@@ -1,10 +1,22 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useMemo } from 'react';
-import { CustomNode, FlowchartEdge, NodeEntryRule, NodeVisibilityCondition } from '@/types/flowchart';
-import { checkChoiceCoverage, CoverageResult, checkEdgeConditionConflicts, EdgeConflict, checkCompoundConditionCoverage, CompoundCoverageResult } from '@/domain/coverage';
-import { generateUUID } from '@/lib/uuid';
-import { FlowchartGenerator } from '@/lib/flowchartGenerator';
+import { useState, useCallback, useMemo } from "react";
+import {
+  CustomNode,
+  FlowchartEdge,
+  NodeEntryRule,
+  NodeVisibilityCondition,
+} from "@/types/flowchart";
+import {
+  checkChoiceCoverage,
+  CoverageResult,
+  checkEdgeConditionConflicts,
+  EdgeConflict,
+  checkCompoundConditionCoverage,
+  CompoundCoverageResult,
+} from "@/domain/coverage";
+import { generateUUID } from "@/lib/uuid";
+import { FlowchartGenerator } from "@/lib/flowchartGenerator";
 
 /**
  * フローチャートのノード状態管理フック
@@ -80,12 +92,12 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
   const addNode = useCallback(() => {
     const newId = generateUUID();
     // 設問ノードの数をカウント
-    const questionCount = nodes.filter(n => !n.nodeType || n.nodeType === 'question').length;
+    const questionCount = nodes.filter((n) => !n.nodeType || n.nodeType === "question").length;
 
-    setNodes(prev => {
+    setNodes((prev) => {
       // 終了ノードを分離
-      const endNodes = prev.filter(n => n.nodeType === 'end');
-      const otherNodes = prev.filter(n => n.nodeType !== 'end');
+      const endNodes = prev.filter((n) => n.nodeType === "end");
+      const otherNodes = prev.filter((n) => n.nodeType !== "end");
 
       // 直前のノード（新規ノードの接続元）を特定
       const previousNode = otherNodes[otherNodes.length - 1];
@@ -94,21 +106,25 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
       const newNode: CustomNode = {
         id: newId,
         label: `Q${questionCount + 1}`,
-        shape: 'rectangle',
-        nodeType: 'question',
-        entryRules: previousNode ? [{
-          id: generateUUID(),
-          sourceNodeId: previousNode.id,
-          style: 'solid',
-          visibilityCondition: { type: 'default' },
-        }] : [],
+        shape: "rectangle",
+        nodeType: "question",
+        entryRules: previousNode
+          ? [
+              {
+                id: generateUUID(),
+                sourceNodeId: previousNode.id,
+                style: "solid",
+                visibilityCondition: { type: "default" },
+              },
+            ]
+          : [],
       };
 
       // 終了ノードの到達ルールを更新（直前のノードを参照しているものを新規ノードに変更）
-      const updatedEndNodes = endNodes.map(endNode => {
+      const updatedEndNodes = endNodes.map((endNode) => {
         if (!endNode.entryRules || !previousNode) return endNode;
 
-        const updatedRules = endNode.entryRules.map(rule => {
+        const updatedRules = endNode.entryRules.map((rule) => {
           if (rule.sourceNodeId === previousNode.id) {
             return { ...rule, sourceNodeId: newId };
           }
@@ -130,17 +146,17 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
     const newId = generateUUID();
     const newNode: CustomNode = {
       id: newId,
-      label: '終了',
-      shape: 'trapezoidAlt',
-      nodeType: 'end',
+      label: "終了",
+      shape: "trapezoidAlt",
+      nodeType: "end",
       entryRules: [],
     };
 
-    setNodes(prev => [...prev, newNode]);
+    setNodes((prev) => [...prev, newNode]);
   }, []);
 
   const updateNode = useCallback((index: number, updates: Partial<CustomNode>) => {
-    setNodes(prev => {
+    setNodes((prev) => {
       const newNodes = [...prev];
       newNodes[index] = { ...newNodes[index], ...updates };
       return newNodes;
@@ -153,94 +169,100 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
    * - 終了ノード: 最低1つは残す必要あり
    * - 設問ノード: 自由に削除可能
    */
-  const removeNode = useCallback((index: number) => {
-    const targetNode = nodes[index];
-    const nodeId = targetNode.id;
+  const removeNode = useCallback(
+    (index: number) => {
+      const targetNode = nodes[index];
+      const nodeId = targetNode.id;
 
-    // 開始ノードは削除不可
-    if (targetNode.nodeType === 'start') {
-      console.warn('開始ノードは削除できません');
-      return;
-    }
-
-    // 終了ノードの場合、最低1つは残す必要あり
-    if (targetNode.nodeType === 'end') {
-      const endNodeCount = nodes.filter(n => n.nodeType === 'end').length;
-      if (endNodeCount <= 1) {
-        console.warn('終了ノードは最低1つ必要です');
+      // 開始ノードは削除不可
+      if (targetNode.nodeType === "start") {
+        console.warn("開始ノードは削除できません");
         return;
       }
-    }
 
-    setNodes(prev => {
-      // ノードを削除し、他ノードの entryRules から参照を削除
-      return prev
-        .filter((_, i) => i !== index)
-        .map(node => {
-          if (!node.entryRules) return node;
+      // 終了ノードの場合、最低1つは残す必要あり
+      if (targetNode.nodeType === "end") {
+        const endNodeCount = nodes.filter((n) => n.nodeType === "end").length;
+        if (endNodeCount <= 1) {
+          console.warn("終了ノードは最低1つ必要です");
+          return;
+        }
+      }
 
-          // sourceNodeId が削除対象のノードを参照している entryRules を削除
-          const filteredRules = node.entryRules.filter(rule => rule.sourceNodeId !== nodeId);
+      setNodes((prev) => {
+        // ノードを削除し、他ノードの entryRules から参照を削除
+        return prev
+          .filter((_, i) => i !== index)
+          .map((node) => {
+            if (!node.entryRules) return node;
 
-          // 複合条件内で削除対象のノードを参照している条件を削除
-          const cleanedRules = filteredRules.map(rule => {
-            if (rule.visibilityCondition?.type === 'compound') {
-              const filteredConditions = rule.visibilityCondition.compound.conditions.filter(
-                cond => cond.nodeId !== nodeId
-              );
-              // 条件が空になった場合は default に変更
-              if (filteredConditions.length === 0) {
+            // sourceNodeId が削除対象のノードを参照している entryRules を削除
+            const filteredRules = node.entryRules.filter((rule) => rule.sourceNodeId !== nodeId);
+
+            // 複合条件内で削除対象のノードを参照している条件を削除
+            const cleanedRules = filteredRules.map((rule) => {
+              if (rule.visibilityCondition?.type === "compound") {
+                const filteredConditions = rule.visibilityCondition.compound.conditions.filter(
+                  (cond) => cond.nodeId !== nodeId,
+                );
+                // 条件が空になった場合は default に変更
+                if (filteredConditions.length === 0) {
+                  return {
+                    ...rule,
+                    visibilityCondition: { type: "default" } as NodeVisibilityCondition,
+                  };
+                }
                 return {
                   ...rule,
-                  visibilityCondition: { type: 'default' } as NodeVisibilityCondition,
+                  visibilityCondition: {
+                    type: "compound",
+                    compound: {
+                      ...rule.visibilityCondition.compound,
+                      conditions: filteredConditions,
+                    },
+                  } as NodeVisibilityCondition,
                 };
               }
-              return {
-                ...rule,
-                visibilityCondition: {
-                  type: 'compound',
-                  compound: {
-                    ...rule.visibilityCondition.compound,
-                    conditions: filteredConditions,
-                  },
-                } as NodeVisibilityCondition,
-              };
-            }
-            return rule;
-          });
+              return rule;
+            });
 
-          return { ...node, entryRules: cleanedRules };
-        });
-    });
-  }, [nodes]);
+            return { ...node, entryRules: cleanedRules };
+          });
+      });
+    },
+    [nodes],
+  );
 
   /**
    * ノードが削除可能かどうかをチェック
    */
-  const canRemoveNode = useCallback((index: number): boolean => {
-    const targetNode = nodes[index];
+  const canRemoveNode = useCallback(
+    (index: number): boolean => {
+      const targetNode = nodes[index];
 
-    // 開始ノードは削除不可
-    if (targetNode.nodeType === 'start') {
-      return false;
-    }
+      // 開始ノードは削除不可
+      if (targetNode.nodeType === "start") {
+        return false;
+      }
 
-    // 終了ノードの場合、最低1つは残す必要あり
-    if (targetNode.nodeType === 'end') {
-      const endNodeCount = nodes.filter(n => n.nodeType === 'end').length;
-      return endNodeCount > 1;
-    }
+      // 終了ノードの場合、最低1つは残す必要あり
+      if (targetNode.nodeType === "end") {
+        const endNodeCount = nodes.filter((n) => n.nodeType === "end").length;
+        return endNodeCount > 1;
+      }
 
-    // 設問ノードは削除可能
-    return true;
-  }, [nodes]);
+      // 設問ノードは削除可能
+      return true;
+    },
+    [nodes],
+  );
 
   const toggleChoicesEdit = useCallback((index: number) => {
-    setEditingChoicesIndex(prev => prev === index ? null : index);
+    setEditingChoicesIndex((prev) => (prev === index ? null : index));
   }, []);
 
   const addChoice = useCallback((nodeIndex: number) => {
-    setNodes(prev => {
+    setNodes((prev) => {
       const newNodes = [...prev];
       const node = newNodes[nodeIndex];
       const choices = node.choices || [];
@@ -254,7 +276,7 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
   }, []);
 
   const removeChoice = useCallback((nodeIndex: number, choiceIndex: number) => {
-    setNodes(prev => {
+    setNodes((prev) => {
       const newNodes = [...prev];
       newNodes[nodeIndex] = {
         ...newNodes[nodeIndex],
@@ -264,54 +286,66 @@ export function useFlowchartState(initialNodes: CustomNode[]) {
     });
   }, []);
 
-  const updateChoice = useCallback((nodeIndex: number, choiceIndex: number, field: 'id' | 'label', value: string) => {
-    setNodes(prev => {
-      const newNodes = [...prev];
-      if (newNodes[nodeIndex].choices) {
-        const newChoices = [...newNodes[nodeIndex].choices!];
-        newChoices[choiceIndex] = { ...newChoices[choiceIndex], [field]: value };
-        newNodes[nodeIndex] = { ...newNodes[nodeIndex], choices: newChoices };
-      }
-      return newNodes;
-    });
-  }, []);
+  const updateChoice = useCallback(
+    (nodeIndex: number, choiceIndex: number, field: "id" | "label", value: string) => {
+      setNodes((prev) => {
+        const newNodes = [...prev];
+        if (newNodes[nodeIndex].choices) {
+          const newChoices = [...newNodes[nodeIndex].choices!];
+          newChoices[choiceIndex] = { ...newChoices[choiceIndex], [field]: value };
+          newNodes[nodeIndex] = { ...newNodes[nodeIndex], choices: newChoices };
+        }
+        return newNodes;
+      });
+    },
+    [],
+  );
 
   // ========== EntryRule 操作 ==========
 
-  const addEntryRule = useCallback((nodeId: string, rule: Omit<NodeEntryRule, 'id'>) => {
-    setNodes(prev => prev.map(node => {
-      if (node.id !== nodeId) return node;
-      const newRule: NodeEntryRule = {
-        ...rule,
-        id: generateUUID(),
-      };
-      return {
-        ...node,
-        entryRules: [...(node.entryRules || []), newRule],
-      };
-    }));
+  const addEntryRule = useCallback((nodeId: string, rule: Omit<NodeEntryRule, "id">) => {
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id !== nodeId) return node;
+        const newRule: NodeEntryRule = {
+          ...rule,
+          id: generateUUID(),
+        };
+        return {
+          ...node,
+          entryRules: [...(node.entryRules || []), newRule],
+        };
+      }),
+    );
   }, []);
 
-  const updateEntryRule = useCallback((nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => {
-    setNodes(prev => prev.map(node => {
-      if (node.id !== nodeId || !node.entryRules) return node;
-      return {
-        ...node,
-        entryRules: node.entryRules.map(rule =>
-          rule.id === ruleId ? { ...rule, ...updates } : rule
-        ),
-      };
-    }));
-  }, []);
+  const updateEntryRule = useCallback(
+    (nodeId: string, ruleId: string, updates: Partial<NodeEntryRule>) => {
+      setNodes((prev) =>
+        prev.map((node) => {
+          if (node.id !== nodeId || !node.entryRules) return node;
+          return {
+            ...node,
+            entryRules: node.entryRules.map((rule) =>
+              rule.id === ruleId ? { ...rule, ...updates } : rule,
+            ),
+          };
+        }),
+      );
+    },
+    [],
+  );
 
   const removeEntryRule = useCallback((nodeId: string, ruleId: string) => {
-    setNodes(prev => prev.map(node => {
-      if (node.id !== nodeId || !node.entryRules) return node;
-      return {
-        ...node,
-        entryRules: node.entryRules.filter(rule => rule.id !== ruleId),
-      };
-    }));
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id !== nodeId || !node.entryRules) return node;
+        return {
+          ...node,
+          entryRules: node.entryRules.filter((rule) => rule.id !== ruleId),
+        };
+      }),
+    );
   }, []);
 
   return {

@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from "react";
 import {
   FlowchartNode,
   FlowchartEdge,
@@ -12,16 +12,20 @@ import {
   NodeVisibilityCondition,
   SingleCondition,
   NodeType,
-} from '@/types/flowchart';
-import { getReachableQuestionNodes, getReachableChoicesConstraints, isValidEdgeOrder } from '@/domain/graphAnalysis';
+} from "@/types/flowchart";
+import {
+  getReachableQuestionNodes,
+  getReachableChoicesConstraints,
+  isValidEdgeOrder,
+} from "@/domain/graphAnalysis";
 
 // 数値演算子のオプション
 const numericOperators: { value: NumericOperator; label: string; symbol: string }[] = [
-  { value: 'eq', label: '等しい', symbol: '=' },
-  { value: 'gt', label: 'より大きい', symbol: '>' },
-  { value: 'lt', label: 'より小さい', symbol: '<' },
-  { value: 'gte', label: '以上', symbol: '>=' },
-  { value: 'lte', label: '以下', symbol: '<=' },
+  { value: "eq", label: "等しい", symbol: "=" },
+  { value: "gt", label: "より大きい", symbol: ">" },
+  { value: "lt", label: "より小さい", symbol: "<" },
+  { value: "gte", label: "以上", symbol: ">=" },
+  { value: "lte", label: "以下", symbol: "<=" },
 ];
 
 /** 複合条件用のノード定義 */
@@ -32,11 +36,11 @@ export interface ConditionNode {
   choices?: ChoiceOption[];
 }
 
-type ConditionType = 'choice' | 'numeric' | 'compound' | 'default';
+type ConditionType = "choice" | "numeric" | "compound" | "default";
 
 export interface EntryRuleEditorProps {
   /** 編集モード */
-  mode: 'add' | 'edit';
+  mode: "add" | "edit";
   /** 編集対象のルール（mode='edit' 時は必須） */
   initialRule?: NodeEntryRule;
   /** 対象ノードのID（選択肢から除外するため） */
@@ -48,7 +52,7 @@ export interface EntryRuleEditorProps {
   /** 全エッジ一覧（経路解析用） */
   allEdges: FlowchartEdge[];
   /** 保存コールバック */
-  onSave: (rule: Omit<NodeEntryRule, 'id'>) => void;
+  onSave: (rule: Omit<NodeEntryRule, "id">) => void;
   /** キャンセルコールバック */
   onCancel: () => void;
 }
@@ -64,61 +68,64 @@ export default function EntryRuleEditor({
   onCancel,
 }: EntryRuleEditorProps) {
   // 状態
-  const [sourceNodeId, setSourceNodeId] = useState<string>('');
-  const [conditionType, setConditionType] = useState<ConditionType>('default');
-  const [style, setStyle] = useState<EdgeStyle>('solid');
+  const [sourceNodeId, setSourceNodeId] = useState<string>("");
+  const [conditionType, setConditionType] = useState<ConditionType>("default");
+  const [style, setStyle] = useState<EdgeStyle>("solid");
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
-  const [numericOperator, setNumericOperator] = useState<NumericOperator>('eq');
-  const [numericValue, setNumericValue] = useState<string>('');
-  const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(new Map());
+  const [numericOperator, setNumericOperator] = useState<NumericOperator>("eq");
+  const [numericValue, setNumericValue] = useState<string>("");
+  const [compoundConditions, setCompoundConditions] = useState<Map<string, SingleCondition>>(
+    new Map(),
+  );
 
   // 選択可能なノード（対象ノード自身と終了ノードを除く、かつ順序が有効なもの）
   // 終了ノードは接続元として選択不可（フローの終点のため）
   // 配列インデックスが接続先より小さいノードのみ選択可能（循環防止）
   const selectableNodes = useMemo(
-    () => availableNodes.filter(n => {
-      // 対象ノード自身を除外
-      if (n.id === targetNodeId) return false;
-      // 終了ノードを接続元から除外
-      const nodeType = (n as FlowchartNode & { nodeType?: NodeType }).nodeType;
-      if (nodeType === 'end') return false;
-      // 順序が有効なノードのみ（接続元のインデックス < 接続先のインデックス）
-      if (!isValidEdgeOrder(allNodes, n.id, targetNodeId)) return false;
-      return true;
-    }),
-    [availableNodes, targetNodeId, allNodes]
+    () =>
+      availableNodes.filter((n) => {
+        // 対象ノード自身を除外
+        if (n.id === targetNodeId) return false;
+        // 終了ノードを接続元から除外
+        const nodeType = (n as FlowchartNode & { nodeType?: NodeType }).nodeType;
+        if (nodeType === "end") return false;
+        // 順序が有効なノードのみ（接続元のインデックス < 接続先のインデックス）
+        if (!isValidEdgeOrder(allNodes, n.id, targetNodeId)) return false;
+        return true;
+      }),
+    [availableNodes, targetNodeId, allNodes],
   );
 
   // 初期値を設定
   useEffect(() => {
-    if (mode === 'edit' && initialRule) {
+    if (mode === "edit" && initialRule) {
       setSourceNodeId(initialRule.sourceNodeId);
-      setStyle(initialRule.style || 'solid');
+      setStyle(initialRule.style || "solid");
 
       const condition = initialRule.visibilityCondition;
-      if (!condition || condition.type === 'default') {
-        setConditionType('default');
+      if (!condition || condition.type === "default") {
+        setConditionType("default");
         setSelectedChoiceIds([]);
-        setNumericOperator('eq');
-        setNumericValue('');
+        setNumericOperator("eq");
+        setNumericValue("");
         setCompoundConditions(new Map());
-      } else if (condition.type === 'choice') {
-        setConditionType('choice');
+      } else if (condition.type === "choice") {
+        setConditionType("choice");
         setSelectedChoiceIds(condition.choiceIds);
-        setNumericOperator('eq');
-        setNumericValue('');
+        setNumericOperator("eq");
+        setNumericValue("");
         setCompoundConditions(new Map());
-      } else if (condition.type === 'numeric') {
-        setConditionType('numeric');
+      } else if (condition.type === "numeric") {
+        setConditionType("numeric");
         setSelectedChoiceIds([]);
         setNumericOperator(condition.numeric.operator);
         setNumericValue(String(condition.numeric.value));
         setCompoundConditions(new Map());
-      } else if (condition.type === 'compound') {
-        setConditionType('compound');
+      } else if (condition.type === "compound") {
+        setConditionType("compound");
         setSelectedChoiceIds([]);
-        setNumericOperator('eq');
-        setNumericValue('');
+        setNumericOperator("eq");
+        setNumericValue("");
         const compoundMap = new Map<string, SingleCondition>();
         for (const cond of condition.compound.conditions) {
           compoundMap.set(cond.nodeId, cond);
@@ -127,21 +134,21 @@ export default function EntryRuleEditor({
       }
     } else {
       // 新規追加モード
-      setSourceNodeId(selectableNodes.length > 0 ? selectableNodes[0].id : '');
-      setConditionType('default');
-      setStyle('solid');
+      setSourceNodeId(selectableNodes.length > 0 ? selectableNodes[0].id : "");
+      setConditionType("default");
+      setStyle("solid");
       setSelectedChoiceIds([]);
-      setNumericOperator('eq');
-      setNumericValue('');
+      setNumericOperator("eq");
+      setNumericValue("");
       setCompoundConditions(new Map());
     }
   }, [mode, initialRule, selectableNodes]);
 
   // 選択されたソースノードの情報
   // 接続元ノードの情報は availableNodes から取得（選択肢・数値条件の判定用）
-  const selectedSourceNode = availableNodes.find(n => n.id === sourceNodeId);
+  const selectedSourceNode = availableNodes.find((n) => n.id === sourceNodeId);
   const sourceHasChoices = selectedSourceNode?.choices && selectedSourceNode.choices.length > 0;
-  const sourceIsNumeric = selectedSourceNode?.questionCategory === 'NA';
+  const sourceIsNumeric = selectedSourceNode?.questionCategory === "NA";
 
   // 選択中のソースノードから既にデフォルトエッジが出ているかをチェック
   // 編集モードの場合は、自分自身のルールは除外する
@@ -151,8 +158,8 @@ export default function EntryRuleEditor({
       if (!node.entryRules) continue;
       for (const rule of node.entryRules) {
         // 編集モードの場合、自分自身のルールは除外
-        if (mode === 'edit' && initialRule && rule.id === initialRule.id) continue;
-        if (rule.sourceNodeId === sourceNodeId && rule.visibilityCondition?.type === 'default') {
+        if (mode === "edit" && initialRule && rule.id === initialRule.id) continue;
+        if (rule.sourceNodeId === sourceNodeId && rule.visibilityCondition?.type === "default") {
           return true;
         }
       }
@@ -164,12 +171,12 @@ export default function EntryRuleEditor({
   // デフォルトエッジは1つのソースノードから1つのみ許可されるため、
   // 既にデフォルトエッジがある場合は選択肢条件か数値条件にリセット
   useEffect(() => {
-    if (hasExistingDefaultEdge && conditionType === 'default') {
+    if (hasExistingDefaultEdge && conditionType === "default") {
       // ソースノードの種類に応じて適切な条件タイプを選択
       if (sourceHasChoices) {
-        setConditionType('choice');
+        setConditionType("choice");
       } else if (sourceIsNumeric) {
-        setConditionType('numeric');
+        setConditionType("numeric");
       }
       // それ以外の場合（設問ノードでない場合など）はデフォルトのまま
       // ただしUIでは選択不可になる
@@ -186,10 +193,10 @@ export default function EntryRuleEditor({
     const reachableNodes = getReachableQuestionNodes(sourceNodeId, allNodes, allEdges);
 
     // 接続元ノード自身が設問ノードの場合は追加
-    const sourceNode = allNodes.find(n => n.id === sourceNodeId);
-    if (sourceNode && sourceNode.questionCategory && sourceNode.questionCategory !== 'FA') {
+    const sourceNode = allNodes.find((n) => n.id === sourceNodeId);
+    if (sourceNode && sourceNode.questionCategory && sourceNode.questionCategory !== "FA") {
       // 既に含まれていない場合のみ追加
-      const alreadyIncluded = reachableNodes.some(n => n.id === sourceNodeId);
+      const alreadyIncluded = reachableNodes.some((n) => n.id === sourceNodeId);
       if (!alreadyIncluded) {
         reachableNodes.push(sourceNode);
       }
@@ -200,14 +207,15 @@ export default function EntryRuleEditor({
     // 例: Q3 → Q4 のエッジを追加する場合、Q3 への到達経路上の制約が適用される
     const choiceConstraints = getReachableChoicesConstraints(sourceNodeId, allEdges);
 
-    return reachableNodes.map(node => {
+    return reachableNodes.map((node) => {
       // このノードに対する選択肢の制約を取得
       const allowedChoices = choiceConstraints.get(node.id);
 
       // 制約がある場合はフィルタリング、ない場合はすべての選択肢を許可
-      const filteredChoices = allowedChoices && node.choices
-        ? node.choices.filter(c => allowedChoices.has(c.id))
-        : node.choices;
+      const filteredChoices =
+        allowedChoices && node.choices
+          ? node.choices.filter((c) => allowedChoices.has(c.id))
+          : node.choices;
 
       return {
         id: node.id,
@@ -233,13 +241,13 @@ export default function EntryRuleEditor({
   const isValid = useMemo(() => {
     if (!sourceNodeId) return false;
     switch (conditionType) {
-      case 'default':
+      case "default":
         return true;
-      case 'choice':
+      case "choice":
         return selectedChoiceIds.length > 0;
-      case 'numeric':
-        return numericValue !== '';
-      case 'compound':
+      case "numeric":
+        return numericValue !== "";
+      case "compound":
         return compoundConditions.size >= 1;
       default:
         return false;
@@ -253,18 +261,18 @@ export default function EntryRuleEditor({
     let visibilityCondition: NodeVisibilityCondition | undefined;
 
     switch (conditionType) {
-      case 'default':
-        visibilityCondition = { type: 'default' };
+      case "default":
+        visibilityCondition = { type: "default" };
         break;
-      case 'choice':
+      case "choice":
         if (selectedChoiceIds.length > 0) {
-          visibilityCondition = { type: 'choice', choiceIds: selectedChoiceIds };
+          visibilityCondition = { type: "choice", choiceIds: selectedChoiceIds };
         }
         break;
-      case 'numeric':
+      case "numeric":
         if (numericValue) {
           visibilityCondition = {
-            type: 'numeric',
+            type: "numeric",
             numeric: {
               operator: numericOperator,
               value: parseFloat(numericValue),
@@ -272,21 +280,21 @@ export default function EntryRuleEditor({
           };
         }
         break;
-      case 'compound':
+      case "compound":
         if (compoundConditions.size >= 1) {
           const conditions = Array.from(compoundConditions.values());
           visibilityCondition = {
-            type: 'compound',
+            type: "compound",
             compound: {
               conditions,
-              operator: 'AND',
+              operator: "AND",
             },
           };
         }
         break;
     }
 
-    const rule: Omit<NodeEntryRule, 'id'> = {
+    const rule: Omit<NodeEntryRule, "id"> = {
       sourceNodeId,
       style,
       visibilityCondition,
@@ -296,41 +304,37 @@ export default function EntryRuleEditor({
   };
 
   // スタイル設定（mode に応じて色を変える）
-  const containerBgClass = mode === 'add' ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-400';
-  const headerTextClass = mode === 'add' ? 'text-green-800' : 'text-yellow-800';
-  const buttonBgClass = mode === 'add' ? 'bg-green-500 hover:bg-green-600' : 'bg-yellow-500 hover:bg-yellow-600';
-  const selectedChoiceBgClass = mode === 'add' ? 'bg-green-500' : 'bg-yellow-500';
+  const containerBgClass =
+    mode === "add" ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-400";
+  const headerTextClass = mode === "add" ? "text-green-800" : "text-yellow-800";
+  const buttonBgClass =
+    mode === "add" ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600";
+  const selectedChoiceBgClass = mode === "add" ? "bg-green-500" : "bg-yellow-500";
 
   return (
     <div className={`p-4 rounded-lg border-2 space-y-3 ${containerBgClass}`}>
       <div className="flex items-center justify-between">
         <h4 className={`font-medium ${headerTextClass}`}>
-          {mode === 'add' ? '新しい到達ルールを追加' : 'ルールを編集中'}
+          {mode === "add" ? "新しい到達ルールを追加" : "ルールを編集中"}
         </h4>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-gray-500 hover:text-gray-700"
-        >
+        <button type="button" onClick={onCancel} className="text-gray-500 hover:text-gray-700">
           ✕
         </button>
       </div>
 
       {/* ソースノード選択 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          接続元ノード
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">接続元ノード</label>
         <select
           value={sourceNodeId}
-          onChange={e => {
+          onChange={(e) => {
             setSourceNodeId(e.target.value);
             setSelectedChoiceIds([]);
-            setNumericValue('');
+            setNumericValue("");
           }}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
         >
-          {selectableNodes.map(node => (
+          {selectableNodes.map((node) => (
             <option key={node.id} value={node.id}>
               {node.label} ({node.id})
             </option>
@@ -340,12 +344,10 @@ export default function EntryRuleEditor({
 
       {/* 条件タイプ選択 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          条件タイプ
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">条件タイプ</label>
         <select
           value={conditionType}
-          onChange={e => setConditionType(e.target.value as ConditionType)}
+          onChange={(e) => setConditionType(e.target.value as ConditionType)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
         >
           {/* デフォルトエッジは同一ソースノードから1つのみ許可 */}
@@ -355,7 +357,7 @@ export default function EntryRuleEditor({
           {/* 複合条件は経路上に2つ以上の設問ノードがある場合のみ表示 */}
           {conditionNodes.length >= 2 && <option value="compound">複合条件</option>}
         </select>
-        {hasExistingDefaultEdge && conditionType !== 'default' && (
+        {hasExistingDefaultEdge && conditionType !== "default" && (
           <p className="text-xs text-gray-500 mt-1">
             ※ このノードには既にデフォルトエッジが設定されています
           </p>
@@ -363,19 +365,19 @@ export default function EntryRuleEditor({
       </div>
 
       {/* 選択肢条件 */}
-      {conditionType === 'choice' && selectedSourceNode?.choices && (
+      {conditionType === "choice" && selectedSourceNode?.choices && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             選択肢（複数選択可）
           </label>
           <div className="flex flex-wrap gap-2 p-2 bg-white rounded-lg border border-gray-200">
-            {selectedSourceNode.choices.map(choice => (
+            {selectedSourceNode.choices.map((choice) => (
               <button
                 key={choice.id}
                 type="button"
                 onClick={() => {
                   if (selectedChoiceIds.includes(choice.id)) {
-                    setSelectedChoiceIds(selectedChoiceIds.filter(id => id !== choice.id));
+                    setSelectedChoiceIds(selectedChoiceIds.filter((id) => id !== choice.id));
                   } else {
                     setSelectedChoiceIds([...selectedChoiceIds, choice.id]);
                   }
@@ -383,7 +385,7 @@ export default function EntryRuleEditor({
                 className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                   selectedChoiceIds.includes(choice.id)
                     ? `${selectedChoiceBgClass} text-white`
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
                 {choice.label}
@@ -394,18 +396,16 @@ export default function EntryRuleEditor({
       )}
 
       {/* 数値条件 */}
-      {conditionType === 'numeric' && (
+      {conditionType === "numeric" && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            数値条件
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">数値条件</label>
           <div className="flex gap-2 items-center">
             <select
               value={numericOperator}
-              onChange={e => setNumericOperator(e.target.value as NumericOperator)}
+              onChange={(e) => setNumericOperator(e.target.value as NumericOperator)}
               className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
             >
-              {numericOperators.map(op => (
+              {numericOperators.map((op) => (
                 <option key={op.value} value={op.value}>
                   {op.label} ({op.symbol})
                 </option>
@@ -414,7 +414,7 @@ export default function EntryRuleEditor({
             <input
               type="number"
               value={numericValue}
-              onChange={e => setNumericValue(e.target.value)}
+              onChange={(e) => setNumericValue(e.target.value)}
               placeholder="値を入力"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
             />
@@ -423,13 +423,13 @@ export default function EntryRuleEditor({
       )}
 
       {/* 複合条件 */}
-      {conditionType === 'compound' && (
+      {conditionType === "compound" && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             複合条件設定（AND条件）
           </label>
           <div className="space-y-2 max-h-40 overflow-y-auto">
-            {conditionNodes.map(node => {
+            {conditionNodes.map((node) => {
               const currentCondition = compoundConditions.get(node.id);
               const isSelected = !!currentCondition;
 
@@ -437,7 +437,7 @@ export default function EntryRuleEditor({
                 <div
                   key={node.id}
                   className={`p-2 rounded-lg border ${
-                    isSelected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200'
+                    isSelected ? "bg-purple-50 border-purple-300" : "bg-white border-gray-200"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -455,52 +455,55 @@ export default function EntryRuleEditor({
                     )}
                   </div>
 
-                  {(node.questionCategory === 'SA' || node.questionCategory === 'MA') && node.choices && (
-                    <div className="flex flex-wrap gap-1">
-                      {node.choices.map(choice => {
-                        const isChoiceSelected = currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
-                        return (
-                          <button
-                            key={choice.id}
-                            type="button"
-                            onClick={() => {
-                              const currentChoices = currentCondition?.choiceCondition?.choiceIds || [];
-                              const newChoices = isChoiceSelected
-                                ? currentChoices.filter(id => id !== choice.id)
-                                : [...currentChoices, choice.id];
-                              if (newChoices.length > 0) {
-                                updateCompoundCondition(node.id, {
-                                  nodeId: node.id,
-                                  conditionType: 'choice',
-                                  choiceCondition: { choiceIds: newChoices },
-                                });
-                              } else {
-                                updateCompoundCondition(node.id, null);
-                              }
-                            }}
-                            className={`px-2 py-0.5 text-xs rounded ${
-                              isChoiceSelected
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 text-gray-700 border border-gray-300'
-                            }`}
-                          >
-                            {choice.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {(node.questionCategory === "SA" || node.questionCategory === "MA") &&
+                    node.choices && (
+                      <div className="flex flex-wrap gap-1">
+                        {node.choices.map((choice) => {
+                          const isChoiceSelected =
+                            currentCondition?.choiceCondition?.choiceIds.includes(choice.id);
+                          return (
+                            <button
+                              key={choice.id}
+                              type="button"
+                              onClick={() => {
+                                const currentChoices =
+                                  currentCondition?.choiceCondition?.choiceIds || [];
+                                const newChoices = isChoiceSelected
+                                  ? currentChoices.filter((id) => id !== choice.id)
+                                  : [...currentChoices, choice.id];
+                                if (newChoices.length > 0) {
+                                  updateCompoundCondition(node.id, {
+                                    nodeId: node.id,
+                                    conditionType: "choice",
+                                    choiceCondition: { choiceIds: newChoices },
+                                  });
+                                } else {
+                                  updateCompoundCondition(node.id, null);
+                                }
+                              }}
+                              className={`px-2 py-0.5 text-xs rounded ${
+                                isChoiceSelected
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-gray-100 text-gray-700 border border-gray-300"
+                              }`}
+                            >
+                              {choice.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                  {node.questionCategory === 'NA' && (
+                  {node.questionCategory === "NA" && (
                     <div className="flex gap-1 items-center">
                       <select
-                        value={currentCondition?.numericCondition?.operator || 'eq'}
-                        onChange={e => {
+                        value={currentCondition?.numericCondition?.operator || "eq"}
+                        onChange={(e) => {
                           const value = currentCondition?.numericCondition?.value;
                           if (value !== undefined) {
                             updateCompoundCondition(node.id, {
                               nodeId: node.id,
-                              conditionType: 'numeric',
+                              conditionType: "numeric",
                               numericCondition: {
                                 operator: e.target.value as NumericOperator,
                                 value,
@@ -510,21 +513,23 @@ export default function EntryRuleEditor({
                         }}
                         className="px-1 py-0.5 text-xs border border-gray-300 rounded bg-white"
                       >
-                        {numericOperators.map(op => (
-                          <option key={op.value} value={op.value}>{op.symbol}</option>
+                        {numericOperators.map((op) => (
+                          <option key={op.value} value={op.value}>
+                            {op.symbol}
+                          </option>
                         ))}
                       </select>
                       <input
                         type="number"
-                        value={currentCondition?.numericCondition?.value ?? ''}
-                        onChange={e => {
+                        value={currentCondition?.numericCondition?.value ?? ""}
+                        onChange={(e) => {
                           const value = e.target.value ? parseFloat(e.target.value) : undefined;
                           if (value !== undefined) {
                             updateCompoundCondition(node.id, {
                               nodeId: node.id,
-                              conditionType: 'numeric',
+                              conditionType: "numeric",
                               numericCondition: {
-                                operator: currentCondition?.numericCondition?.operator || 'eq',
+                                operator: currentCondition?.numericCondition?.operator || "eq",
                                 value,
                               },
                             });
@@ -559,7 +564,7 @@ export default function EntryRuleEditor({
           disabled={!isValid}
           className={`flex-1 py-2 px-4 text-white font-medium rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${buttonBgClass}`}
         >
-          {mode === 'add' ? '追加' : '保存'}
+          {mode === "add" ? "追加" : "保存"}
         </button>
       </div>
     </div>

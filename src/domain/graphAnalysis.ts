@@ -9,7 +9,7 @@ import {
   CompoundCondition,
   SingleCondition,
   NodeType,
-} from '@/types/flowchart';
+} from "@/types/flowchart";
 
 /**
  * ノードの型定義（最小限の情報）
@@ -39,14 +39,14 @@ interface GraphEdge {
 export function getReachableQuestionNodes<T extends GraphNode>(
   targetNodeId: string,
   nodes: T[],
-  edges: GraphEdge[]
+  edges: GraphEdge[],
 ): T[] {
   const visited = new Set<string>();
   const questionNodeIds = new Set<string>();
 
   // 逆方向エッジマップを構築（to → from の対応）
   const reverseEdges = new Map<string, string[]>();
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     if (!reverseEdges.has(edge.to)) {
       reverseEdges.set(edge.to, []);
     }
@@ -61,24 +61,24 @@ export function getReachableQuestionNodes<T extends GraphNode>(
     visited.add(nodeId);
 
     // 現在のノードを取得
-    const node = nodes.find(n => n.id === nodeId);
+    const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
     // 設問ノード（SA/MA/NA）の場合、収集
-    if (node.questionCategory && node.questionCategory !== 'FA') {
+    if (node.questionCategory && node.questionCategory !== "FA") {
       questionNodeIds.add(node.id);
     }
 
     // 逆方向エッジを辿る
     const predecessors = reverseEdges.get(nodeId) || [];
-    predecessors.forEach(predId => dfs(predId));
+    predecessors.forEach((predId) => dfs(predId));
   }
 
   dfs(targetNodeId);
 
   // IDセットから実際のノードオブジェクトを取得
   return Array.from(questionNodeIds)
-    .map(id => nodes.find(n => n.id === id))
+    .map((id) => nodes.find((n) => n.id === id))
     .filter((node): node is T => node !== undefined);
 }
 
@@ -96,14 +96,14 @@ export function getReachableQuestionNodes<T extends GraphNode>(
  */
 export function getReachableChoicesConstraints(
   targetNodeId: string,
-  edges: FlowchartEdge[]
+  edges: FlowchartEdge[],
 ): Map<string, Set<string>> {
   // 結果を格納するMap（ノードID → 到達可能な選択肢のSet）
   const result = new Map<string, Set<string>>();
 
   // 逆方向エッジマップを構築（to → edges の対応）
   const reverseEdgeMap = new Map<string, FlowchartEdge[]>();
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     if (!reverseEdgeMap.has(edge.to)) {
       reverseEdgeMap.set(edge.to, []);
     }
@@ -118,7 +118,7 @@ export function getReachableChoicesConstraints(
    * 単一条件から選択肢IDを抽出
    */
   function extractChoiceIdsFromSingleCondition(condition: SingleCondition): string[] {
-    if (condition.conditionType === 'choice' && condition.choiceCondition) {
+    if (condition.conditionType === "choice" && condition.choiceCondition) {
       return condition.choiceCondition.choiceIds;
     }
     return [];
@@ -128,7 +128,7 @@ export function getReachableChoicesConstraints(
    * 複合条件から設問ノードごとの選択肢制約を抽出
    */
   function extractConstraintsFromCompoundCondition(
-    compound: CompoundCondition
+    compound: CompoundCondition,
   ): Map<string, string[]> {
     const constraints = new Map<string, string[]>();
     for (const cond of compound.conditions) {
@@ -195,8 +195,8 @@ export function getReachableChoicesConstraints(
 
     // 複数経路の制約を和集合にする
     const unionSet = new Set<string>();
-    constraintSets.forEach(constraintSet => {
-      constraintSet.forEach(choiceId => unionSet.add(choiceId));
+    constraintSets.forEach((constraintSet) => {
+      constraintSet.forEach((choiceId) => unionSet.add(choiceId));
     });
 
     result.set(nodeId, unionSet);
@@ -212,11 +212,8 @@ export function getReachableChoicesConstraints(
  * @param nodeId 対象ノードのID
  * @returns ノードの配列インデックス（見つからない場合は -1）
  */
-export function getNodeOrder<T extends { id: string }>(
-  nodes: T[],
-  nodeId: string
-): number {
-  return nodes.findIndex(n => n.id === nodeId);
+export function getNodeOrder<T extends { id: string }>(nodes: T[], nodeId: string): number {
+  return nodes.findIndex((n) => n.id === nodeId);
 }
 
 /**
@@ -231,7 +228,7 @@ export function getNodeOrder<T extends { id: string }>(
 export function isValidEdgeOrder<T extends { id: string }>(
   nodes: T[],
   sourceNodeId: string,
-  targetNodeId: string
+  targetNodeId: string,
 ): boolean {
   const sourceIndex = getNodeOrder(nodes, sourceNodeId);
   const targetIndex = getNodeOrder(nodes, targetNodeId);
@@ -264,16 +261,16 @@ interface NodeWithType {
  */
 export function getSelectableSourceNodes<T extends NodeWithType>(
   nodes: T[],
-  targetNodeId: string
+  targetNodeId: string,
 ): T[] {
   const targetIndex = getNodeOrder(nodes, targetNodeId);
 
-  return nodes.filter(node => {
+  return nodes.filter((node) => {
     // 自分自身は除外
     if (node.id === targetNodeId) return false;
 
     // 終了ノードは接続元として選択不可
-    if (node.nodeType === 'end') return false;
+    if (node.nodeType === "end") return false;
 
     // 配列インデックスが接続先より小さいノードのみ選択可能
     const nodeIndex = getNodeOrder(nodes, node.id);

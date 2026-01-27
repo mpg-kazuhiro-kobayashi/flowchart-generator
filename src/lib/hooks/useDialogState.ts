@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useCallback } from 'react';
-import { FlowchartNode } from '@/types/flowchart';
+import { useState, useCallback } from "react";
+import { FlowchartNode } from "@/types/flowchart";
 
 /**
  * ダイアログ（ノード編集）の状態管理フック

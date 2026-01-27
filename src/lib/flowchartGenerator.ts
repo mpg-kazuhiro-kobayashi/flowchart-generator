@@ -12,12 +12,12 @@ import {
   CustomNode,
   NodeEntryRule,
   NodeType,
-} from '@/types/flowchart';
+} from "@/types/flowchart";
 import {
   formatCondition,
   createConditionLabelResolver,
   ConditionLabelResolver,
-} from '@/domain/conditionFormatter';
+} from "@/domain/conditionFormatter";
 
 /**
  * JavaScript Object から Mermaid フローチャート文字列を生成するクラス
@@ -68,14 +68,14 @@ export class FlowchartGenerator {
       }
     }
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
    * 初期設定ディレクティブを生成
    */
-  private static generateInitDirective(init: FlowchartDefinition['init']): string {
-    if (!init) return '';
+  private static generateInitDirective(init: FlowchartDefinition["init"]): string {
+    if (!init) return "";
 
     const config: Record<string, unknown> = {};
     if (init.theme) config.theme = init.theme;
@@ -89,8 +89,8 @@ export class FlowchartGenerator {
    */
   private static getNodeLabel(node: FlowchartNode): string {
     const nodeType = (node as FlowchartNode & { nodeType?: NodeType }).nodeType;
-    if (nodeType === 'start') return '開始';
-    if (nodeType === 'end') return '終了';
+    if (nodeType === "start") return "開始";
+    if (nodeType === "end") return "終了";
     return node.label;
   }
 
@@ -98,7 +98,7 @@ export class FlowchartGenerator {
    * ノード定義を生成
    */
   private static generateNode(node: FlowchartNode): string {
-    const shape = node.shape || 'rectangle';
+    const shape = node.shape || "rectangle";
     const label = this.getNodeLabel(node);
     const nodeText = this.wrapNodeText(label, shape);
 
@@ -119,33 +119,33 @@ export class FlowchartGenerator {
     const escapedText = this.escapeText(text);
 
     switch (shape) {
-      case 'rectangle':
+      case "rectangle":
         return `[${escapedText}]`;
-      case 'round':
+      case "round":
         return `(${escapedText})`;
-      case 'stadium':
+      case "stadium":
         return `([${escapedText}])`;
-      case 'subroutine':
+      case "subroutine":
         return `[[${escapedText}]]`;
-      case 'database':
+      case "database":
         return `[(${escapedText})]`;
-      case 'circle':
+      case "circle":
         return `((${escapedText}))`;
-      case 'doubleCircle':
+      case "doubleCircle":
         return `(((${escapedText})))`;
-      case 'asymmetric':
+      case "asymmetric":
         return `>${escapedText}]`;
-      case 'rhombus':
+      case "rhombus":
         return `{${escapedText}}`;
-      case 'hexagon':
+      case "hexagon":
         return `{{${escapedText}}}`;
-      case 'parallelogram':
+      case "parallelogram":
         return `[/${escapedText}/]`;
-      case 'parallelogramAlt':
+      case "parallelogramAlt":
         return `[\\${escapedText}\\]`;
-      case 'trapezoid':
+      case "trapezoid":
         return `[/${escapedText}\\]`;
-      case 'trapezoidAlt':
+      case "trapezoidAlt":
         return `[\\${escapedText}/]`;
       default:
         return `[${escapedText}]`;
@@ -157,8 +157,8 @@ export class FlowchartGenerator {
    */
   private static escapeText(text: string): string {
     // ダブルクォートで囲む必要がある特殊文字を含む場合
-    if (text.includes('"') || text.includes('\n')) {
-      return `"${text.replace(/"/g, '#quot;')}"`;
+    if (text.includes('"') || text.includes("\n")) {
+      return `"${text.replace(/"/g, "#quot;")}"`;
     }
     return text;
   }
@@ -169,17 +169,14 @@ export class FlowchartGenerator {
    * HTMLエンティティに変換する
    */
   private static escapeEdgeLabel(text: string): string {
-    return text
-      .replace(/>/g, '&gt;')
-      .replace(/</g, '&lt;')
-      .replace(/"/g, '&quot;');
+    return text.replace(/>/g, "&gt;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   }
 
   /**
    * エッジ定義を生成
    */
   private static generateEdge(edge: FlowchartEdge): string {
-    const style = edge.style || 'solid';
+    const style = edge.style || "solid";
     const arrow = this.getArrowSyntax(style);
 
     if (edge.label) {
@@ -197,26 +194,26 @@ export class FlowchartGenerator {
    */
   private static getArrowSyntax(style: EdgeStyle): string {
     switch (style) {
-      case 'solid':
-        return '-->';
-      case 'dotted':
-        return '-.->';
-      case 'thick':
-        return '==>';
-      case 'solidNoArrow':
-        return '---';
-      case 'dottedNoArrow':
-        return '-.-';
-      case 'thickNoArrow':
-        return '===';
-      case 'biDirectional':
-        return '<-->';
-      case 'circleEnd':
-        return '--o';
-      case 'crossEnd':
-        return '--x';
+      case "solid":
+        return "-->";
+      case "dotted":
+        return "-.->";
+      case "thick":
+        return "==>";
+      case "solidNoArrow":
+        return "---";
+      case "dottedNoArrow":
+        return "-.-";
+      case "thickNoArrow":
+        return "===";
+      case "biDirectional":
+        return "<-->";
+      case "circleEnd":
+        return "--o";
+      case "crossEnd":
+        return "--x";
       default:
-        return '-->';
+        return "-->";
     }
   }
 
@@ -236,7 +233,7 @@ export class FlowchartGenerator {
       lines.push(`        ${nodeId}`);
     }
 
-    lines.push('    end');
+    lines.push("    end");
 
     return lines;
   }
@@ -247,7 +244,7 @@ export class FlowchartGenerator {
   private static generateStyleDef(style: FlowchartStyle): string {
     const styleStr = Object.entries(style.styles)
       .map(([key, value]) => `${key}:${value}`)
-      .join(',');
+      .join(",");
 
     return `classDef ${style.className} ${styleStr}`;
   }
@@ -258,7 +255,7 @@ export class FlowchartGenerator {
   private static generateLinkStyle(linkStyle: FlowchartLinkStyle): string {
     const styleStr = Object.entries(linkStyle.styles)
       .map(([key, value]) => `${key}:${value}`)
-      .join(',');
+      .join(",");
 
     return `linkStyle ${linkStyle.linkIndex} ${styleStr}`;
   }
@@ -293,19 +290,15 @@ export class FlowchartGenerator {
   private static entryRuleToEdge(
     rule: NodeEntryRule,
     targetNodeId: string,
-    resolver: ConditionLabelResolver
+    resolver: ConditionLabelResolver,
   ): FlowchartEdge {
     // visibilityCondition からラベルを自動生成
-    const label = formatCondition(
-      rule.visibilityCondition,
-      rule.sourceNodeId,
-      resolver
-    );
+    const label = formatCondition(rule.visibilityCondition, rule.sourceNodeId, resolver);
 
     const edge: FlowchartEdge = {
       from: rule.sourceNodeId,
       to: targetNodeId,
-      style: rule.style || 'solid',
+      style: rule.style || "solid",
       label: label || undefined,
     };
 
@@ -314,23 +307,23 @@ export class FlowchartGenerator {
       const vc = rule.visibilityCondition;
 
       switch (vc.type) {
-        case 'choice':
+        case "choice":
           edge.condition = {
             choiceIds: vc.choiceIds,
           } satisfies EdgeCondition;
           break;
 
-        case 'numeric':
+        case "numeric":
           edge.condition = {
             numericCondition: vc.numeric,
           } satisfies EdgeCondition;
           break;
 
-        case 'compound':
+        case "compound":
           edge.compoundCondition = vc.compound satisfies CompoundCondition;
           break;
 
-        case 'default':
+        case "default":
           // 条件なし（無条件遷移またはデフォルト分岐）
           // coverage では未指定扱い
           break;

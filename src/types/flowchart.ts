@@ -3,37 +3,37 @@
  */
 
 /** フローチャートの方向 */
-export type FlowchartDirection = 'TB' | 'TD' | 'BT' | 'LR' | 'RL';
+export type FlowchartDirection = "TB" | "TD" | "BT" | "LR" | "RL";
 
 /** ノードの形状 */
 export type NodeShape =
-  | 'rectangle'      // [text] - デフォルト
-  | 'round'          // (text) - 角丸
-  | 'stadium'        // ([text]) - スタジアム形
-  | 'subroutine'     // [[text]] - サブルーチン
-  | 'database'       // [(text)] - データベース（円筒形）
-  | 'circle'         // ((text)) - 円形
-  | 'doubleCircle'   // (((text))) - 二重円
-  | 'asymmetric'     // >text] - 非対称形
-  | 'rhombus'        // {text} - ひし形（条件分岐）
-  | 'hexagon'        // {{text}} - 六角形
-  | 'parallelogram'  // [/text/] - 平行四辺形
-  | 'parallelogramAlt' // [\text\] - 逆平行四辺形
-  | 'trapezoid'      // [/text\] - 台形
-  | 'trapezoidAlt';  // [\text/] - 逆台形
+  | "rectangle" // [text] - デフォルト
+  | "round" // (text) - 角丸
+  | "stadium" // ([text]) - スタジアム形
+  | "subroutine" // [[text]] - サブルーチン
+  | "database" // [(text)] - データベース（円筒形）
+  | "circle" // ((text)) - 円形
+  | "doubleCircle" // (((text))) - 二重円
+  | "asymmetric" // >text] - 非対称形
+  | "rhombus" // {text} - ひし形（条件分岐）
+  | "hexagon" // {{text}} - 六角形
+  | "parallelogram" // [/text/] - 平行四辺形
+  | "parallelogramAlt" // [\text\] - 逆平行四辺形
+  | "trapezoid" // [/text\] - 台形
+  | "trapezoidAlt"; // [\text/] - 逆台形
 
 /** ノードタイプ（フロー上の役割を定義） */
 export type NodeType =
-  | 'start'    // 開始ノード（フローの入口、1つのみ）
-  | 'question' // 設問ノード（SA/MA/FA/NA）
-  | 'end';     // 終了ノード（フローの出口、複数可）
+  | "start" // 開始ノード（フローの入口、1つのみ）
+  | "question" // 設問ノード（SA/MA/FA/NA）
+  | "end"; // 終了ノード（フローの出口、複数可）
 
 /** 設問カテゴリ */
 export type QuestionCategory =
-  | 'SA'  // Single Answer - 単一選択
-  | 'MA'  // Multiple Answer - 複数選択
-  | 'FA'  // Free Answer - 自由入力（分岐不可）
-  | 'NA'; // Numeric Answer - 数値入力
+  | "SA" // Single Answer - 単一選択
+  | "MA" // Multiple Answer - 複数選択
+  | "FA" // Free Answer - 自由入力（分岐不可）
+  | "NA"; // Numeric Answer - 数値入力
 
 /** 選択肢（SA/MA用） */
 export interface ChoiceOption {
@@ -45,11 +45,11 @@ export interface ChoiceOption {
 
 /** 数値条件の比較演算子（NA用） */
 export type NumericOperator =
-  | 'eq'  // 等しい (==)
-  | 'gt'  // より大きい (>)
-  | 'lt'  // より小さい (<)
-  | 'gte' // 以上 (>=)
-  | 'lte'; // 以下 (<=)
+  | "eq" // 等しい (==)
+  | "gt" // より大きい (>)
+  | "lt" // より小さい (<)
+  | "gte" // 以上 (>=)
+  | "lte"; // 以下 (<=)
 
 /** 数値条件（NA用） */
 export interface NumericCondition {
@@ -65,13 +65,13 @@ export interface SingleCondition {
   /** 条件対象の設問ノードID */
   nodeId: string;
   /** 条件の種類 */
-  conditionType: 'choice' | 'numeric';
+  conditionType: "choice" | "numeric";
   /** 選択肢条件（SA/MA用） */
   choiceCondition?: {
     /** 選択肢ID */
     choiceIds: string[];
     /** マッチタイプ（MAの場合） */
-    matchType?: 'any' | 'all' | 'exact';
+    matchType?: "any" | "all" | "exact";
   };
   /** 数値条件（NA用） */
   numericCondition?: NumericCondition;
@@ -85,20 +85,20 @@ export interface CompoundCondition {
   /** 条件の配列 */
   conditions: SingleCondition[];
   /** 条件の結合方法（現在はANDのみ対応） */
-  operator: 'AND';
+  operator: "AND";
 }
 
 /** エッジ（矢印）のスタイル */
 export type EdgeStyle =
-  | 'solid'          // --> 実線矢印
-  | 'dotted'         // -.-> 点線矢印
-  | 'thick'          // ==> 太線矢印
-  | 'solidNoArrow'   // --- 実線（矢印なし）
-  | 'dottedNoArrow'  // -.- 点線（矢印なし）
-  | 'thickNoArrow'   // === 太線（矢印なし）
-  | 'biDirectional'  // <--> 双方向矢印
-  | 'circleEnd'      // --o 丸で終端
-  | 'crossEnd';      // --x Xで終端
+  | "solid" // --> 実線矢印
+  | "dotted" // -.-> 点線矢印
+  | "thick" // ==> 太線矢印
+  | "solidNoArrow" // --- 実線（矢印なし）
+  | "dottedNoArrow" // -.- 点線（矢印なし）
+  | "thickNoArrow" // === 太線（矢印なし）
+  | "biDirectional" // <--> 双方向矢印
+  | "circleEnd" // --o 丸で終端
+  | "crossEnd"; // --x Xで終端
 
 /** フローチャートのノード */
 export interface FlowchartNode {
@@ -188,17 +188,17 @@ export interface FlowchartDefinition {
   linkStyles?: FlowchartLinkStyle[];
   /** 初期設定（テーマなど） */
   init?: {
-    theme?: 'default' | 'forest' | 'dark' | 'neutral' | 'base';
+    theme?: "default" | "forest" | "dark" | "neutral" | "base";
     themeVariables?: Record<string, string>;
   };
 }
 
 /** ノードの表示条件 */
 export type NodeVisibilityCondition =
-  | { type: 'choice'; choiceIds: string[] } // sourceNodeId自身の選択肢
-  | { type: 'numeric'; numeric: NumericCondition } // 数値条件
-  | { type: 'compound'; compound: CompoundCondition } // 複合条件（AND条件）
-  | { type: 'default' }; // 無条件または他の条件にマッチしない場合（フォールバック）
+  | { type: "choice"; choiceIds: string[] } // sourceNodeId自身の選択肢
+  | { type: "numeric"; numeric: NumericCondition } // 数値条件
+  | { type: "compound"; compound: CompoundCondition } // 複合条件（AND条件）
+  | { type: "default" }; // 無条件または他の条件にマッチしない場合（フォールバック）
 
 /** ノードへの到達ルール */
 export interface NodeEntryRule {
@@ -225,4 +225,3 @@ export interface CustomNode {
   /** このノードが表示される経路を表すルール */
   entryRules?: NodeEntryRule[];
 }
-
